@@ -15,8 +15,9 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function TalkPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const [m, { user }] = await Promise.all([getMaterial(id), currentUser()]);
-  if (!m || !(m.kind === "talk" || m.kind === "slides")) notFound();
+  if (!m || !(m.kind === "talk" || m.kind === "slides" || m.kind === "video")) notFound();
   const pdf = fileUrl(m.kind === "talk" ? m.pdf_path : m.file_path);
+  const drive = m.url?.match(/drive\.google\.com\/file\/d\/([\w-]+)/)?.[1];
   return (
     <div className="wrap page stack">
       <div>
@@ -24,7 +25,16 @@ export default async function TalkPage({ params }: { params: Promise<{ id: strin
         <h1 style={{ marginTop: 10 }}>{m.title}</h1>
         <div className="muted mono small" style={{ marginTop: 6 }}>{[m.speaker, m.pages ? `${m.pages} slides` : "", m.duration_seconds ? fmtDur(m.duration_seconds) : ""].filter(Boolean).join(" · ")}</div>
       </div>
-      <TalkPlayer materialId={m.id} pdfUrl={pdf} audioUrl={m.kind === "talk" ? fileUrl(m.audio_path) : undefined} marks={m.marks} notes={m.notes} signedIn={!!user} />
+      {m.kind === "video" ? (
+        <div className="video">
+          {drive
+            ? <iframe src={`https://drive.google.com/file/d/${drive}/preview`} allow="autoplay; fullscreen" allowFullScreen title={m.title} />
+            : m.file_path ? <video controls preload="metadata" src={fileUrl(m.file_path)} />
+            : m.url ? <a className="btn" href={m.url} target="_blank" rel="noopener">Open video ↗</a> : null}
+        </div>
+      ) : (
+        <TalkPlayer materialId={m.id} pdfUrl={pdf} audioUrl={m.kind === "talk" ? fileUrl(m.audio_path) : undefined} marks={m.marks} notes={m.notes} signedIn={!!user} />
+      )}
       <div className="promo">
         <b>Liked this talk?</b>
         <span className="muted">Follow Kleros for the next one, or try what the speaker described.</span>

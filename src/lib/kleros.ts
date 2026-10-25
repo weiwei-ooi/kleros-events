@@ -49,7 +49,11 @@ export function productsFor(topics: string[], n = 2): Product[] {
   return (hits.length ? hits : [PRODUCTS[0], PRODUCTS[5]]).slice(0, n);
 }
 
+// The Kleros | Events profile on Luma, where every Kleros-run event takes RSVPs.
+export const LUMA_URL = "https://luma.com/user/kleros_io";
+
 export const SOCIALS = [
+  { label: "Luma", url: LUMA_URL },
   { label: "X", url: "https://x.com/kleros_io" },
   { label: "Telegram", url: "https://t.me/kleros" },
   { label: "LinkedIn", url: "https://www.linkedin.com/company/kleros" },

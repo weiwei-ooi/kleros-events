@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { supabaseBrowser } from "@/lib/supabase/client";
+import { ensureUser, supabaseBrowser } from "@/lib/supabase/client";
 import type { Question } from "@/lib/types";
 
 export default function AskTheSpeaker({ eventId, signedIn, isTeam, displayName, slug }: { eventId: string; signedIn: boolean; isTeam: boolean; displayName: string; slug: string }) {
@@ -10,6 +10,7 @@ export default function AskTheSpeaker({ eventId, signedIn, isTeam, displayName, 
   const [uid, setUid] = useState<string | null>(null);
   const [body, setBody] = useState("");
   const [anon, setAnon] = useState(false);
+  const [guestName, setGuestName] = useState("");
   const [sort, setSort] = useState<"top" | "new">("top");
   const [err, setErr] = useState("");
 
@@ -38,16 +39,20 @@ export default function AskTheSpeaker({ eventId, signedIn, isTeam, displayName, 
   async function ask(e: React.FormEvent) {
     e.preventDefault(); setErr("");
     const sb = supabaseBrowser();
-    const { data, error } = await sb.from("questions").insert({ event_id: eventId, body: body.trim(), anonymous: anon, author_id: uid, author_name: anon ? null : displayName || null }).select("id").single();
+    let me = uid;
+    try { me = (await ensureUser()).id; setUid(me); } catch (x) { setErr((x as Error).message); return; }
+    const named = !anon && (signedIn ? displayName : guestName.trim());
+    const { data, error } = await sb.from("questions").insert({ event_id: eventId, body: body.trim(), anonymous: !named, author_id: me, author_name: named || null }).select("id").single();
     if (error) { setErr(error.message); return; }
-    if (data && uid) await sb.from("question_votes").insert({ question_id: data.id, user_id: uid });
+    if (data) await sb.from("question_votes").insert({ question_id: data.id, user_id: me });
     setBody(""); load();
   }
   async function vote(q: Question) {
-    if (!uid) return;
+    let me = uid;
+    if (!me) { try { me = (await ensureUser()).id; setUid(me); } catch (x) { setErr((x as Error).message); return; } }
     const sb = supabaseBrowser();
-    if (myVotes.has(q.id)) await sb.from("question_votes").delete().eq("question_id", q.id).eq("user_id", uid);
-    else await sb.from("question_votes").insert({ question_id: q.id, user_id: uid });
+    if (myVotes.has(q.id)) await sb.from("question_votes").delete().eq("question_id", q.id).eq("user_id", me);
+    else await sb.from("question_votes").insert({ question_id: q.id, user_id: me });
     load();
   }
   async function moderate(q: Question, patch: Partial<Question>) {
@@ -62,21 +67,22 @@ export default function AskTheSpeaker({ eventId, signedIn, isTeam, displayName, 
 
   return (
     <div className="stack">
-      {signedIn ? (
-        <form className="row-flex" onSubmit={ask}>
-          <input className="search" value={body} onChange={(e) => setBody(e.target.value)} placeholder="Ask the Kleros speakers a question…" maxLength={280} minLength={3} required aria-label="Your question" />
-          <label className="muted small"><input type="checkbox" checked={anon} onChange={(e) => setAnon(e.target.checked)} /> anonymous</label>
-          <button className="btn primary sm" type="submit">Ask</button>
-        </form>
-      ) : <div className="muted small"><Link href={`/login?next=/events/${slug}%23ask`}>Sign in</Link> to ask a question or upvote one.</div>}
+      <form className="row-flex" onSubmit={ask}>
+        <input className="search" value={body} onChange={(e) => setBody(e.target.value)} placeholder="Ask the Kleros speakers a question…" maxLength={280} minLength={3} required aria-label="Your question" />
+        {signedIn
+          ? <label className="muted small"><input type="checkbox" checked={anon} onChange={(e) => setAnon(e.target.checked)} /> anonymous</label>
+          : <input className="search" style={{ flex: "0 1 160px" }} value={guestName} onChange={(e) => setGuestName(e.target.value)} placeholder="Your name (optional)" maxLength={40} aria-label="Your name" />}
+        <button className="btn primary sm" type="submit">Ask</button>
+      </form>
       {err && <div className="note">{err}</div>}
       <div className="row-flex">
         <div className="seg" role="group" aria-label="Sort"><button aria-pressed={sort === "top"} onClick={() => setSort("top")}>Top</button><button aria-pressed={sort === "new"} onClick={() => setSort("new")}>Newest</button></div>
-        {isTeam && <Link className="btn sm" href={`/events/${slug}/live`} target="_blank">Open big screen ↗</Link>}
+        <Link className="btn sm ghost" href={`/q/${slug}`}>Ask from your phone</Link>
+        {isTeam && <Link className="btn sm" href={`/events/${slug}/live`} target="_blank">● Event mode ↗</Link>}
       </div>
       {list.map((q) => (
         <div key={q.id} className={`q ${q.featured ? "feat" : ""} ${q.status === "answered" ? "done" : ""}`}>
-          <button className={`vote ${myVotes.has(q.id) ? "on" : ""}`} onClick={() => vote(q)} disabled={!uid} aria-label="Upvote">▲<span>{q.votes}</span></button>
+          <button className={`vote ${myVotes.has(q.id) ? "on" : ""}`} onClick={() => vote(q)} aria-label="Upvote">▲<span>{q.votes}</span></button>
           <div style={{ minWidth: 0 }}>
             <div style={{ overflowWrap: "anywhere" }}>{q.body}</div>
             <div className="by">{q.anonymous || !q.author_name ? "Anonymous" : q.author_name}{q.featured ? " · on screen" : ""}{q.status === "answered" ? " · answered" : ""}</div>

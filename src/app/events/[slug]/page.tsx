@@ -4,7 +4,8 @@ import { getEvent, eventCounts } from "@/lib/data";
 import { fmtRange, isLive, isPast, place } from "@/lib/format";
 import { ROLE_LABEL, productsFor, KLEROS_HOSTED } from "@/lib/kleros";
 import { RolePill } from "@/components/EventCard";
-import MaterialRow from "@/components/MaterialRow";
+import MaterialRow, { fileUrl, isWatchable } from "@/components/MaterialRow";
+import Link from "next/link";
 import AttendanceButtons from "@/components/AttendanceButtons";
 import AskTheSpeaker from "@/components/AskTheSpeaker";
 import MeetingForm from "@/components/MeetingForm";
@@ -26,8 +27,8 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   if (!data) notFound();
   const { event: e, agenda, team, materials } = data;
   const past = isPast(e);
-  const talks = materials.filter((m) => m.kind === "talk");
-  const other = materials.filter((m) => m.kind !== "talk");
+  const talks = materials.filter((m) => isWatchable(m));
+  const other = materials.filter((m) => !isWatchable(m));
   const c = counts[e.id] ?? { going: 0, attended: 0 };
   const products = productsFor(e.topics);
   const hosted = KLEROS_HOSTED.includes(e.kleros_role);
@@ -35,7 +36,8 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
 
   return (
     <div className="wrap">
-      <div className="ev-head">
+      <div className={e.cover_path ? "ev-head with-cover" : "ev-head"}>
+        <div className="stack" style={{ gap: 10 }}>
         <div className="meta">
           <RolePill e={e} />
           <span className="pill plain">{e.event_type}</span>
@@ -44,6 +46,13 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
         </div>
         <h1>{e.title}</h1>
         <div className="mono">{fmtRange(e.starts_on, e.ends_on)}{e.start_time ? ` · ${e.start_time.slice(0, 5)}` : ""}{e.timezone ? ` ${e.timezone}` : ""} · {place(e)}</div>
+        <div className="row-flex" style={{ marginTop: 6 }}>
+          {e.url && !past && <a className="btn cta" href={e.url} target="_blank" rel="noopener">{/luma\.com|lu\.ma/.test(e.url) ? "RSVP on Luma" : "Get tickets"}</a>}
+          {profile?.is_team && <Link className="btn" href={`/events/${e.slug}/live`}>● Event mode</Link>}
+        </div>
+        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {e.cover_path && <img className="ev-cover" src={fileUrl(e.cover_path)} alt="" />}
       </div>
 
       <nav className="anchors" aria-label="On this page">

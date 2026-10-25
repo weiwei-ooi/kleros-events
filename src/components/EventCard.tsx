@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { EventRow } from "@/lib/types";
 import { ROLE_SHORT, KLEROS_HOSTED } from "@/lib/kleros";
 import { fmtRange, isLive, place } from "@/lib/format";
+import { fileUrl } from "./MaterialRow";
 
 export function RolePill({ e }: { e: Pick<EventRow, "kleros_role"> }) {
   return KLEROS_HOSTED.includes(e.kleros_role)
@@ -12,6 +13,8 @@ export function RolePill({ e }: { e: Pick<EventRow, "kleros_role"> }) {
 export default function EventCard({ e, talks = 0, going = 0, why, mine }: { e: EventRow; talks?: number; going?: number; why?: string; mine?: string }) {
   return (
     <Link className="card" href={`/events/${e.slug}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {e.cover_path && <div className="cover"><img src={fileUrl(e.cover_path)} alt="" loading="lazy" /></div>}
       <div className="when">
         <span className="date">{fmtRange(e.starts_on, e.ends_on)}</span>
         {mine && <span className="mono" style={{ fontSize: ".75rem", color: "var(--accent)" }}>● {mine}</span>}

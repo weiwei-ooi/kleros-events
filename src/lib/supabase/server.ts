@@ -29,7 +29,8 @@ export async function currentUser() {
   if (!supabaseConfigured) return { user: null, profile: null };
   const sb = await supabaseServer();
   const { data } = await sb.auth.getUser();
-  if (!data.user) return { user: null, profile: null };
+  // Guests who scanned a QR to ask a question get an anonymous session; they aren't "signed in".
+  if (!data.user || data.user.is_anonymous) return { user: null, profile: null };
   const { data: profile } = await sb.from("profiles").select("*").eq("id", data.user.id).maybeSingle();
   return { user: data.user, profile };
 }

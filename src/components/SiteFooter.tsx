@@ -1,4 +1,4 @@
-import { SOCIALS } from "@/lib/kleros";
+import { LUMA_URL, SOCIALS } from "@/lib/kleros";
 
 export default function SiteFooter() {
   return (
@@ -6,7 +6,7 @@ export default function SiteFooter() {
       <div className="wrap">
         <div>
           <h4>Kleros</h4>
-          <div style={{ font: "700 1.3rem var(--font-display)" }}>Justice, decentralized.</div>
+          <div style={{ font: "400 2rem/1.05 var(--font-display)", color: "var(--white)" }}>Justice, <em className="em">decentralized.</em></div>
           <p>Kleros is an on-chain dispute resolution protocol. Randomly selected, crowdsourced jurors rule on cases from escrow disputes to AI agent disagreements.</p>
           <p><a href="https://kleros.io" target="_blank" rel="noopener" style={{ display: "inline", textDecoration: "underline" }}>kleros.io</a></p>
         </div>
@@ -30,7 +30,7 @@ export default function SiteFooter() {
         </div>
         <div className="base">
           <span>Kleros Events · where Kleros has been and is going next</span>
-          <span>Want Kleros at your event? <a href="https://kleros.io" target="_blank" rel="noopener" style={{ display: "inline", textDecoration: "underline" }}>Get in touch</a></span>
+          <span>Want Kleros at your event? <a href="https://kleros.io" target="_blank" rel="noopener" style={{ display: "inline", textDecoration: "underline" }}>Get in touch</a> · <a href={LUMA_URL} target="_blank" rel="noopener" style={{ display: "inline", textDecoration: "underline" }}>All events on Luma</a></span>
         </div>
       </div>
     </footer>

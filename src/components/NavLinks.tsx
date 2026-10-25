@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LUMA_URL } from "@/lib/kleros";
 
 export default function NavLinks({ signedIn, isTeam }: { signedIn: boolean; isTeam: boolean }) {
   const path = usePathname();
@@ -15,6 +16,7 @@ export default function NavLinks({ signedIn, isTeam }: { signedIn: boolean; isTe
       {links.map((l) => (
         <Link key={l.href} href={l.href} aria-current={path.startsWith(l.href) ? "page" : undefined}>{l.label}</Link>
       ))}
+      <a href={LUMA_URL} target="_blank" rel="noopener">Luma ↗</a>
       <a className="btn sm primary" href="https://kleros.io" target="_blank" rel="noopener">kleros.io ↗</a>
     </nav>
   );

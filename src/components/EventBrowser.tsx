@@ -9,10 +9,10 @@ import { endOf, isPast, todayIso } from "@/lib/format";
 type When = "upcoming" | "past" | "month";
 type Host = "all" | "hosted" | "participating";
 
-export default function EventBrowser({ events, talkCounts, counts, initialRole }: {
-  events: EventRow[]; talkCounts: Record<string, number>; counts: Record<string, { going: number }>; initialRole?: string;
+export default function EventBrowser({ events, talkCounts, counts, initialRole, initialWhen }: {
+  events: EventRow[]; talkCounts: Record<string, number>; counts: Record<string, { going: number }>; initialRole?: string; initialWhen?: When;
 }) {
-  const [when, setWhen] = useState<When>("upcoming");
+  const [when, setWhen] = useState<When>(initialWhen ?? "upcoming");
   const [host, setHost] = useState<Host>(initialRole === "host" ? "hosted" : "all");
   const [type, setType] = useState("");
   const [q, setQ] = useState("");

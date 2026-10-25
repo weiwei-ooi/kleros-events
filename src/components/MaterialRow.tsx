@@ -6,8 +6,12 @@ const KIND: Record<string, string> = { talk: "TALK", slides: "PDF", audio: "AUD"
 
 export function fileUrl(path: string | null | undefined) {
   if (!path) return "";
+  if (/^https?:\/\//.test(path)) return path;
   return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/materials/${path}`;
 }
+
+// Talks people can sit down and watch: slide-synced talks and video recordings.
+export const isWatchable = (m: Pick<Material, "kind">) => m.kind === "talk" || m.kind === "video";
 
 export default function MaterialRow({ m, eventTitle, eventSlug }: { m: Material; eventTitle?: string; eventSlug?: string }) {
   const href = m.url || fileUrl(m.file_path);
@@ -24,9 +28,10 @@ export default function MaterialRow({ m, eventTitle, eventSlug }: { m: Material;
         {m.kind === "image" && m.file_path && <img src={fileUrl(m.file_path)} alt={m.title} style={{ maxHeight: 160, borderRadius: 8, marginTop: 6 }} />}
       </div>
       <div className="acts">
-        {m.kind === "talk" && <Link className="btn sm primary" href={`/talks/${m.id}`}>▶ Watch talk</Link>}
+        {isWatchable(m) && <Link className="btn sm primary" href={`/talks/${m.id}`}>▶ Watch</Link>}
         {m.kind === "slides" && m.file_path && <Link className="btn sm" href={`/talks/${m.id}`}>View slides</Link>}
-        {m.kind !== "talk" && m.kind !== "slides" && href && <a className="btn sm" href={href} target="_blank" rel="noopener">Open</a>}
+        {m.kind === "slides" && !m.file_path && m.url && <a className="btn sm" href={m.url} target="_blank" rel="noopener">View slides ↗</a>}
+        {!isWatchable(m) && m.kind !== "slides" && href && <a className="btn sm" href={href} target="_blank" rel="noopener">Open ↗</a>}
         {eventSlug && <Link className="btn sm ghost" href={`/events/${eventSlug}`}>Event</Link>}
       </div>
     </div>

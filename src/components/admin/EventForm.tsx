@@ -20,7 +20,7 @@ export default function EventForm({ event }: { event?: EventRow }) {
     const row = {
       title: s("title")!, kleros_role: s("kleros_role") as KlerosRole, organizer: s("organizer"), event_type: s("event_type")!,
       starts_on: s("starts_on")!, ends_on: s("ends_on"), start_time: s("start_time"), timezone: s("timezone"),
-      city: s("city"), country: s("country"), region: s("region") ?? (s("city") ? null : "Online"), venue: s("venue"), url: s("url"),
+      city: s("city"), country: s("country"), region: s("region") ?? (s("city") ? null : "Online"), venue: s("venue"), url: s("url"), cover_path: s("cover_path"),
       description: s("description"), recap: s("recap"), topics, status: (s("status") ?? "draft") as "draft" | "published",
       slug: s("slug") ?? slugify(`${s("title")}-${s("starts_on")?.slice(0, 7)}`), updated_at: new Date().toISOString(),
     };
@@ -68,7 +68,10 @@ export default function EventForm({ event }: { event?: EventRow }) {
         <div className="field"><label htmlFor="region">Region</label><select id="region" name="region" defaultValue={v?.region ?? ""}><option value="">–</option>{REGIONS.map((r) => <option key={r}>{r}</option>)}</select></div>
         <div className="field"><label htmlFor="venue">Venue or stream</label><input id="venue" name="venue" defaultValue={v?.venue ?? ""} /></div>
       </div>
-      <div className="field"><label htmlFor="url">Event page (Luma, Eventbrite…)</label><input id="url" name="url" type="url" defaultValue={v?.url ?? ""} placeholder="https://" /></div>
+      <div className="two">
+        <div className="field"><label htmlFor="url">Event page (Luma, Eventbrite…)</label><input id="url" name="url" type="url" defaultValue={v?.url ?? ""} placeholder="https://" /></div>
+        <div className="field"><label htmlFor="cover_path">Cover image URL</label><input id="cover_path" name="cover_path" type="url" defaultValue={v?.cover_path ?? ""} placeholder="Right-click the Luma cover → Copy image address" /></div>
+      </div>
       <div className="field"><span className="lbl">Topics (drive recommendations and the product promos shown)</span>
         <div className="chips" style={{ margin: 0 }}>{TOPICS.map((t) => <button type="button" key={t} className="chip" aria-pressed={topics.includes(t)} onClick={() => setTopics(topics.includes(t) ? topics.filter((x) => x !== t) : [...topics, t])}>{t}</button>)}</div></div>
       <div className="field"><label htmlFor="description">Description</label><textarea id="description" name="description" defaultValue={v?.description ?? ""} /></div>

@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { listEvents, listMaterials, eventCounts } from "@/lib/data";
 import { fmtRange, isLive, isPast, place } from "@/lib/format";
-import { ROLE_LABEL } from "@/lib/kleros";
+import { ROLE_LABEL, LUMA_URL } from "@/lib/kleros";
 import EventCard from "@/components/EventCard";
-import MaterialRow from "@/components/MaterialRow";
+import MaterialRow, { isWatchable } from "@/components/MaterialRow";
 import PromoStrip from "@/components/PromoStrip";
 import SetupNotice from "@/components/SetupNotice";
 
@@ -13,7 +13,8 @@ export default async function Home() {
   const [events, materials, counts] = await Promise.all([listEvents(), listMaterials(), eventCounts()]);
   const upcoming = events.filter((e) => !isPast(e));
   const next = upcoming[0];
-  const talks = materials.filter((m) => m.kind === "talk");
+  const recent = events.filter(isPast).sort((a, b) => b.starts_on.localeCompare(a.starts_on)).slice(0, 3);
+  const talks = materials.filter((m) => isWatchable(m));
   const talkCount = (id: string) => talks.filter((m) => m.event_id === id).length;
   const byId = Object.fromEntries(events.map((e) => [e.id, e]));
   return (
@@ -22,13 +23,17 @@ export default async function Home() {
       <div className="hero">
         <div>
           <div className="eyebrow">Kleros on stage and on the road</div>
-          <h1>Every event Kleros hosts or takes part in, with the talks to match.</h1>
-          <p>See where the Kleros team is speaking, sponsoring or judging next. Replay talks with the slides synced to the recording, ask the speakers questions, and book time with the team.</p>
+          <h1>Where Kleros shows up, <em>and what was said there.</em></h1>
+          <p>The events Kleros hosts, sponsors and speaks at, from Chiang Mai to Mumbai. Rewatch the talks with their slides, ask the speakers questions, and meet the team at the next one.</p>
           <div className="stats">
-            <div className="stat"><b className="mono">{upcoming.length}</b><span>upcoming</span></div>
-            <div className="stat"><b className="mono">{events.length}</b><span>events on record</span></div>
-            <div className="stat"><b className="mono">{talks.length}</b><span>recorded talks</span></div>
-            <div className="stat"><b className="mono">{new Set(events.filter((e) => e.city).map((e) => e.city)).size}</b><span>cities</span></div>
+            <div className="stat"><b>{upcoming.length}</b><span>upcoming</span></div>
+            <div className="stat"><b>{events.length}</b><span>events on record</span></div>
+            <div className="stat"><b>{talks.length}</b><span>recorded talks</span></div>
+            <div className="stat"><b>{new Set(events.filter((e) => e.city).map((e) => e.city)).size}</b><span>cities</span></div>
+          </div>
+          <div className="row-flex" style={{ marginTop: 24 }}>
+            <a className="btn cta" href={LUMA_URL} target="_blank" rel="noopener">Follow Kleros on Luma</a>
+            <Link className="btn" href="/talks">Watch the talks</Link>
           </div>
         </div>
         {next && (
@@ -45,6 +50,10 @@ export default async function Home() {
       <div className="grid">
         {upcoming.slice(0, 6).map((e) => <EventCard key={e.id} e={e} talks={talkCount(e.id)} going={counts[e.id]?.going} />)}
         {!upcoming.length && <div className="empty" style={{ gridColumn: "1/-1" }}><b>No upcoming events yet</b>Follow Kleros on X to hear about the next one.</div>}
+      </div>
+      <div className="section-h"><h2>Recently</h2><Link href="/events?when=past">Past events →</Link></div>
+      <div className="grid">
+        {recent.map((e) => <EventCard key={e.id} e={e} talks={talkCount(e.id)} />)}
       </div>
       <div className="section-h"><h2>Latest talks</h2><Link href="/talks">Talk archive →</Link></div>
       <div className="lib">

@@ -18,3 +18,13 @@ export function publicFileUrl(path: string | null | undefined) {
   if (!path) return "";
   return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/materials/${path}`;
 }
+
+// Signed-in user, or an anonymous guest session so people can ask and upvote without an email.
+export async function ensureUser() {
+  const sb = supabaseBrowser();
+  const { data } = await sb.auth.getUser();
+  if (data.user) return data.user;
+  const { data: anon, error } = await sb.auth.signInAnonymously();
+  if (error || !anon.user) throw error ?? new Error("Couldn't start a guest session");
+  return anon.user;
+}
