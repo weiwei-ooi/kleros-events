@@ -1,0 +1,96 @@
+export type KlerosRole = "host" | "co_host" | "speaking" | "sponsor" | "booth" | "judging" | "attending";
+export type MaterialKind = "talk" | "slides" | "audio" | "video" | "doc" | "image" | "link" | "social";
+export type AttendanceStatus = "saved" | "going" | "attended";
+
+export interface EventRow {
+  id: string;
+  slug: string;
+  title: string;
+  kleros_role: KlerosRole;
+  organizer: string | null;
+  event_type: string;
+  starts_on: string;
+  ends_on: string | null;
+  start_time: string | null;
+  timezone: string | null;
+  city: string | null;
+  country: string | null;
+  region: string | null;
+  venue: string | null;
+  url: string | null;
+  description: string | null;
+  topics: string[];
+  cover_path: string | null;
+  recap: string | null;
+  status: "draft" | "published";
+  is_example: boolean;
+}
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  title: string | null;
+  avatar_url: string | null;
+  x_handle: string | null;
+  calendar_url: string | null;
+}
+
+export interface EventTeamRow {
+  part: string | null;
+  team_members: TeamMember;
+}
+
+export interface AgendaItem {
+  id: string;
+  event_id: string;
+  starts_at: string | null;
+  title: string;
+  speaker: string | null;
+  is_kleros: boolean;
+}
+
+export interface SlideMark {
+  p: number;
+  t: number;
+}
+
+export interface Material {
+  id: string;
+  event_id: string;
+  kind: MaterialKind;
+  title: string;
+  speaker: string | null;
+  url: string | null;
+  file_path: string | null;
+  pdf_path: string | null;
+  audio_path: string | null;
+  pages: number | null;
+  duration_seconds: number | null;
+  marks: SlideMark[];
+  notes: Record<string, string>;
+  size_bytes: number | null;
+  created_at: string;
+}
+
+export interface Question {
+  id: string;
+  event_id: string;
+  body: string;
+  anonymous: boolean;
+  author_id: string | null;
+  author_name: string | null;
+  status: "open" | "answered" | "hidden";
+  featured: boolean;
+  created_at: string;
+  votes: number;
+}
+
+export interface Profile {
+  id: string;
+  display_name: string | null;
+  visitor_role: string | null;
+  region: string | null;
+  interests: string[];
+  include_online: boolean;
+  is_team: boolean;
+}
