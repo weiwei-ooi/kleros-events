@@ -6,7 +6,7 @@ export default function SiteFooter() {
       <div className="wrap">
         <div>
           <h4>Kleros</h4>
-          <div style={{ font: "400 2rem/1.05 var(--font-display)", color: "var(--white)" }}>Justice, <em className="em">decentralized.</em></div>
+          <div style={{ font: "400 1.6rem/1.15 var(--font-display)", color: "var(--white)" }}>Justice, <em className="em">decentralized.</em></div>
           <p>Kleros is an on-chain dispute resolution protocol. Randomly selected, crowdsourced jurors rule on cases from escrow disputes to AI agent disagreements.</p>
           <p><a href="https://kleros.io" target="_blank" rel="noopener" style={{ display: "inline", textDecoration: "underline" }}>kleros.io</a></p>
         </div>
