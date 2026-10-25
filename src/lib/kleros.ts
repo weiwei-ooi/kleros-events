@@ -1,6 +1,10 @@
 import type { KlerosRole } from "./types";
 
-export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+export const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}`
+    : "http://localhost:3000");
 
 export const ROLE_LABEL: Record<KlerosRole, string> = {
   host: "Hosted by Kleros",
