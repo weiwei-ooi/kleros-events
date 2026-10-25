@@ -31,6 +31,15 @@ Next.js 15 (App Router) · Supabase (Postgres, auth, storage, realtime) · pdf.j
 6. **Team access:** anyone who signs in with an `@kleros.io` email is a team member automatically. To add someone else, run
    `update profiles set is_team = true where id = (select id from auth.users where email = 'them@example.com');`
 
+## At the venue: event mode
+
+Open an event while signed in with a Kleros account and press **Event mode** (or go to `/events/<slug>/live`). Put that tab on the projector.
+
+- The screen shows the event title, the questions people send, and a QR code to `/q/<slug>`. Guests scan it and ask or upvote from their phone with no account (Supabase anonymous sign-in must be on: Authentication → Sign In / Providers → Allow anonymous sign-ins).
+- Move the mouse to bring up the control bar. **Start recording** records from the laptop microphone. Audio is written to the browser's storage every few seconds, so a crash or a closed lid doesn't lose it; reopen event mode and press **Recover unsaved recording**.
+- **Stop**, name the recording and press **Save to event**. It uploads to the event page as an audio file. **Download copy** keeps a local backup.
+- Hover a question to show it big, mark it answered or hide it.
+
 ## Deploy (Vercel)
 
 Import the repo in Vercel, add the three env vars, and deploy. Point a domain such as `events.kleros.io` at it, then update `NEXT_PUBLIC_SITE_URL` and the Supabase redirect URLs.
