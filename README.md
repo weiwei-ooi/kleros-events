@@ -24,12 +24,12 @@ Next.js 15 (App Router) · Supabase (Postgres, auth, storage, realtime) · pdf.j
 ## Setup
 
 1. **Create a Supabase project** at [supabase.com](https://supabase.com).
-2. **Run the schema:** in the SQL editor, run `supabase/migrations/0001_init.sql`. Optionally run `supabase/seed.sql` for example events; they are marked "Example" and can be removed with `delete from events where is_example;`.
+2. **Run the schema:** in the SQL editor, run the files in `supabase/migrations/` in order. Optionally run `supabase/seed.sql` for example events; they are marked "Example" and can be removed with `delete from events where is_example;`.
 3. **Auth:** under Authentication → URL configuration, set the Site URL to your deployed URL, and add `http://localhost:3000/auth/callback` and `https://<your-domain>/auth/callback` as redirect URLs. Email magic links work out of the box.
 4. **Env:** copy `.env.example` to `.env.local` and fill in `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `NEXT_PUBLIC_SITE_URL`.
 5. **Run:** `npm install && npm run dev`, then open http://localhost:3000.
-6. **Make yourself team:** sign in once, then in the SQL editor run
-   `update profiles set is_team = true where id = (select id from auth.users where email = 'you@kleros.io');`
+6. **Team access:** anyone who signs in with an `@kleros.io` email is a team member automatically. To add someone else, run
+   `update profiles set is_team = true where id = (select id from auth.users where email = 'them@example.com');`
 
 ## Deploy (Vercel)
 
