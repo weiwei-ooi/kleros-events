@@ -11,9 +11,10 @@ The public record of every event Kleros hosts or takes part in (conferences, sid
 - **My events** (magic-link sign-in): saved, going and attended events, private notes, recommendations from topics, region and role, "Talks you missed", and "Continue watching".
 - Calendar file for every event (`/events/<slug>/calendar.ics`) and a projector view for live Q&A (`/events/<slug>/live`).
 
-**For the Kleros team** (`/admin`, for accounts with `profiles.is_team = true`)
-- Events desk: all events, drafts, going counts, a list of past events still missing materials, and the meeting request inbox.
-- Event editor: details, recap, agenda, which team members attend, and materials.
+**For the Kleros team** (`/admin`, for accounts with team access, see "Team access" below)
+- Events desk: Upcoming, Past and Drafts tabs, each row with **Run live** (the host console at `/events/<slug>/host`), **Edit** and **View**. Past events with no materials are flagged "Needs materials". A Meeting requests tab holds the "Meet Kleros" inbox.
+- Event editor (`/admin/events/<id>`): Details, Agenda, Kleros team and Materials sections under a header with **Run live** and **View public page**.
+- **Access** (`/admin/access`, master admin only): who has team access, give access by email, remove or block.
 - **Add a talk:** upload the PDF, then either present and record live in the browser (slide changes are stamped automatically) or upload an existing recording and tap Next as it plays back. Check the timing, add notes per slide, and save.
 - Team roster with X handles and booking links.
 
@@ -28,8 +29,11 @@ Next.js 15 (App Router) · Supabase (Postgres, auth, storage, realtime) · pdf.j
 3. **Auth:** under Authentication → URL configuration, set the Site URL to your deployed URL, and add `http://localhost:3000/auth/callback` and `https://<your-domain>/auth/callback` as redirect URLs. Email magic links work out of the box.
 4. **Env:** copy `.env.example` to `.env.local` and fill in `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `NEXT_PUBLIC_SITE_URL`.
 5. **Run:** `npm install && npm run dev`, then open http://localhost:3000.
-6. **Team access:** anyone who signs in with an `@kleros.io` email is a team member automatically. To add someone else, run
-   `update profiles set is_team = true where id = (select id from auth.users where email = 'them@example.com');`
+6. **Team access** (needs `0003_access.sql`):
+   - Anyone signing in with an `@kleros.io` email gets team access automatically.
+   - `weiwei@kleros.io` is the master admin (`profiles.is_admin`). Only the master admin can open `/admin/access`, add people by email (stored in `team_access`), remove them, or block an address. A block removes access even for an `@kleros.io` email, but never for the master admin. Changes apply at once to existing accounts and on first sign-in for new ones.
+   - Nobody can change their own `is_team` or `is_admin`, and `is_admin` can only be changed from the SQL editor, for example `update profiles set is_admin = true where id = (select id from auth.users where email = 'them@kleros.io');`
+   - Anonymous guests (QR questions) never get team access.
 
 ## At the venue: event mode
 

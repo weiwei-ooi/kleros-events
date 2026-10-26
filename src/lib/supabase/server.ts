@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { cache } from "react";
 
 export const supabaseConfigured = Boolean(
   process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -25,7 +26,12 @@ export async function supabaseServer() {
   );
 }
 
-export async function currentUser() {
+/**
+ * The signed-in user and their profile (select * includes is_team and is_admin).
+ * Anonymous sessions (QR guests asking a question) count as signed out.
+ * Cached per request, so the header, admin layout and page share one lookup.
+ */
+export const currentUser = cache(async () => {
   if (!supabaseConfigured) return { user: null, profile: null };
   const sb = await supabaseServer();
   const { data } = await sb.auth.getUser();
@@ -33,4 +39,4 @@ export async function currentUser() {
   if (!data.user || data.user.is_anonymous) return { user: null, profile: null };
   const { data: profile } = await sb.from("profiles").select("*").eq("id", data.user.id).maybeSingle();
   return { user: data.user, profile };
-}
+});

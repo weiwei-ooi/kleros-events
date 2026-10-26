@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireTeam } from "@/lib/admin";
 import { supabaseServer } from "@/lib/supabase/server";
+import { fmtRange, place } from "@/lib/format";
 import NotTeam from "@/components/NotTeam";
 import EventForm from "@/components/admin/EventForm";
 import AgendaEditor from "@/components/admin/AgendaEditor";
@@ -25,18 +26,55 @@ export default async function EditEventPage({ params }: { params: Promise<{ id: 
     sb.from("materials").select("*").eq("event_id", id).order("created_at"),
   ]);
   const e = event as EventRow;
+  const sections = [
+    { id: "details", label: "Details" },
+    { id: "agenda", label: "Agenda" },
+    { id: "team", label: "Kleros team" },
+    { id: "materials", label: "Materials" },
+  ];
+
   return (
-    <div className="wrap page stack" style={{ gap: 28 }}>
-      <div className="row-flex">
-        <div><Link href="/admin" className="eyebrow" style={{ textDecoration: "none" }}>← Events desk</Link><h1 style={{ marginTop: 8 }}>{e.title}</h1></div>
-        <span style={{ flex: 1 }} />
-        <Link className="btn" href={`/events/${e.slug}`} target="_blank">View public page ↗</Link>
-        <Link className="btn" href={`/events/${e.slug}/live`} target="_blank">Big screen ↗</Link>
+    <div className="adm-editor">
+      <div className="ed-head">
+        <div className="wrap">
+          <div className="ed-top">
+            <div className="ed-title">
+              <Link href="/admin" className="small muted ed-back">← Events desk</Link>
+              <h1>{e.title}</h1>
+              <div className="meta">
+                <span>{fmtRange(e.starts_on, e.ends_on)}</span><span aria-hidden>·</span><span>{place(e)}</span>
+                {e.status === "draft" ? <span className="pill plain">Draft</span> : <span className="pill live">Published</span>}
+              </div>
+            </div>
+            <div className="ed-acts">
+              <Link className="btn primary" href={`/events/${e.slug}/host`}>Run live</Link>
+              <Link className="btn" href={`/events/${e.slug}`} target="_blank">View public page ↗</Link>
+            </div>
+          </div>
+          <nav className="ed-anchors" aria-label="Sections">
+            {sections.map((s) => <a key={s.id} href={`#${s.id}`}>{s.label}</a>)}
+          </nav>
+        </div>
       </div>
-      <section className="stack"><h2>Talks &amp; materials</h2><MaterialsManager event={e} initial={(materials.data ?? []) as Material[]} /></section>
-      <section className="stack"><h2>Kleros team at this event</h2><TeamPicker eventId={id} roster={(roster.data ?? []) as TeamMember[]} initial={team.data ?? []} /></section>
-      <section className="stack"><h2>Agenda</h2><AgendaEditor eventId={id} initial={(agenda.data ?? []) as AgendaItem[]} /></section>
-      <section className="stack"><h2>Details</h2><EventForm event={e} /></section>
+
+      <div className="wrap ed-body">
+        <section id="details" className="ed-sec">
+          <div className="ed-sec-h"><h2>Details</h2><p className="muted small">Title, dates, place, description and the recap shown after the event.</p></div>
+          <EventForm event={e} />
+        </section>
+        <section id="agenda" className="ed-sec">
+          <div className="ed-sec-h"><h2>Agenda</h2><p className="muted small">Sessions in order. Kleros sessions are highlighted on the public page.</p></div>
+          <AgendaEditor eventId={id} initial={(agenda.data ?? []) as AgendaItem[]} />
+        </section>
+        <section id="team" className="ed-sec">
+          <div className="ed-sec-h"><h2>Kleros team</h2><p className="muted small">Who attends for Kleros. Visitors can ask to meet them.</p></div>
+          <TeamPicker eventId={id} roster={(roster.data ?? []) as TeamMember[]} initial={team.data ?? []} />
+        </section>
+        <section id="materials" className="ed-sec">
+          <div className="ed-sec-h"><h2>Materials</h2><p className="muted small">Talks, slides, recordings and links, listed on the event page and in the archive.</p></div>
+          <MaterialsManager event={e} initial={(materials.data ?? []) as Material[]} />
+        </section>
+      </div>
     </div>
   );
 }
