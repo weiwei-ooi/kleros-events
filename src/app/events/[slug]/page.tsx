@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getEvent, eventCounts } from "@/lib/data";
-import { fmtRange, isLive, isPast, place } from "@/lib/format";
-import { ROLE_LABEL, productsFor, KLEROS_HOSTED } from "@/lib/kleros";
-import { RolePill } from "@/components/EventCard";
-import MaterialRow, { fileUrl, isWatchable } from "@/components/MaterialRow";
-import Link from "next/link";
+import { fmtRange, isPast, place, plural } from "@/lib/format";
+import { ROLE_LABEL, productsFor } from "@/lib/kleros";
+import { statusLabel } from "@/components/EventCard";
+import MaterialRow, { MATERIAL_GROUPS, TalkCard, fileUrl, isWatchable } from "@/components/MaterialRow";
 import AttendanceButtons from "@/components/AttendanceButtons";
 import AskTheSpeaker from "@/components/AskTheSpeaker";
 import MeetingForm from "@/components/MeetingForm";
@@ -27,59 +27,114 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   if (!data) notFound();
   const { event: e, agenda, team, materials } = data;
   const past = isPast(e);
+  const isTeam = !!profile?.is_team;
+  const status = statusLabel(e);
   const talks = materials.filter((m) => isWatchable(m));
-  const other = materials.filter((m) => !isWatchable(m));
+  const groups = MATERIAL_GROUPS.map((g) => ({ ...g, items: materials.filter((m) => g.kinds.includes(m.kind)) })).filter((g) => g.items.length);
+  const otherCount = groups.reduce((s, g) => s + g.items.length, 0);
   const c = counts[e.id] ?? { going: 0, attended: 0 };
   const products = productsFor(e.topics);
-  const hosted = KLEROS_HOSTED.includes(e.kleros_role);
-  const booker = team.map((t) => t.team_members).find((m) => m.calendar_url);
+  const booker = team.map((t) => t.team_members).find((m) => m?.calendar_url);
+  const time = e.start_time ? `${e.start_time.slice(0, 5)}${e.timezone ? ` ${e.timezone}` : ""}` : "";
+  const where = [e.venue, place(e)].filter(Boolean).join(", ");
+  const hasAbout = !!(e.description || e.recap);
+  const ticketLabel = e.url && /luma\.com|lu\.ma/.test(e.url) ? "RSVP on Luma" : "Get tickets";
+
+  const sections = [
+    hasAbout && ["about", "About"],
+    talks.length > 0 && ["talks", `Talks (${talks.length})`],
+    otherCount > 0 && ["materials", `Slides & links (${otherCount})`],
+    ["ask", "Ask the speaker"],
+    team.length > 0 && ["team", "Kleros team"],
+    agenda.length > 0 && ["agenda", "Agenda"],
+    ["meet", "Meet Kleros"],
+  ].filter(Boolean) as [string, string][];
 
   return (
     <div className="wrap">
-      <div className={e.cover_path ? "ev-head with-cover" : "ev-head"}>
-        <div className="stack" style={{ gap: 10 }}>
-        <div className="meta">
-          <RolePill e={e} />
-          <span className="pill plain">{e.event_type}</span>
-          {isLive(e) ? <span className="pill live">Happening now</span> : past ? <span className="pill plain">Ended</span> : null}
-          {e.is_example && <span className="pill ex">Example</span>}
-        </div>
-        <h1>{e.title}</h1>
-        <div className="mono">{fmtRange(e.starts_on, e.ends_on)}{e.start_time ? ` · ${e.start_time.slice(0, 5)}` : ""}{e.timezone ? ` ${e.timezone}` : ""} · {place(e)}</div>
-        <div className="row-flex" style={{ marginTop: 6 }}>
-          {e.url && !past && <a className="btn cta" href={e.url} target="_blank" rel="noopener">{/luma\.com|lu\.ma/.test(e.url) ? "RSVP on Luma" : "Get tickets"}</a>}
-          {profile?.is_team && <Link className="btn" href={`/events/${e.slug}/live`}>● Event mode</Link>}
-        </div>
+      <header className={e.cover_path ? "ev-head with-cover" : "ev-head"}>
+        <div className="ev-title">
+          <Link className="back" href="/events">← All events</Link>
+          <div className="labels">
+            <span className="role">{ROLE_LABEL[e.kleros_role]}</span>
+            <span>{e.event_type}</span>
+            {status ? <span className={`pill ${status.cls}`}>{status.text}</span> : past ? <span>Ended</span> : null}
+          </div>
+          <h1>{e.title}</h1>
+          <div className="when-where">
+            <span>{fmtRange(e.starts_on, e.ends_on)}{time && ` · ${time}`}</span>
+            <span>{where}</span>
+          </div>
+          {(e.url && !past) || isTeam ? (
+            <div className="row-flex">
+              {e.url && !past && <a className="btn primary" href={e.url} target="_blank" rel="noopener">{ticketLabel} ↗</a>}
+              {isTeam && <Link className="btn" href={`/events/${e.slug}/host`}>Run this event</Link>}
+              {isTeam && <Link className="btn ghost" href={`/admin/events/${e.id}`}>Edit</Link>}
+            </div>
+          ) : null}
+          {e.status === "draft" && <div className="note">Draft. Only the Kleros team can see this event until it is published.</div>}
         </div>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {e.cover_path && <img className="ev-cover" src={fileUrl(e.cover_path)} alt="" />}
-      </div>
+      </header>
 
       <nav className="anchors" aria-label="On this page">
-        <a href="#about">About</a>
-        {team.length > 0 && <a href="#team">Kleros team</a>}
-        {agenda.length > 0 && <a href="#agenda">Agenda</a>}
-        <a href="#talks">Talks &amp; materials ({materials.length})</a>
-        <a href="#ask">Ask the speaker</a>
-        <a href="#meet">Meet Kleros</a>
+        {sections.map(([id, label]) => <a key={id} href={`#${id}`}>{label}</a>)}
       </nav>
 
       <div className="detail">
-        <div className="stack" style={{ gap: 32 }}>
-          <section id="about" className="stack">
-            {past && e.recap && <div className="box"><div className="eyebrow">Recap</div><p className="desc">{e.recap}</p></div>}
-            <p className={`desc ${e.description ? "" : "muted"}`}>{e.description || "No description yet."}</p>
+        <div className="sections">
+          {hasAbout && (
+            <section id="about" className="sec">
+              <h2>About</h2>
+              {e.recap && (
+                <div className="recap">
+                  <div className="eyebrow">Recap</div>
+                  <p className="desc">{e.recap}</p>
+                </div>
+              )}
+              {e.description && <p className="desc">{e.description}</p>}
+            </section>
+          )}
+
+          {talks.length > 0 && (
+            <section id="talks" className="sec">
+              <h2>Talks</h2>
+              <div className="grid two-up">{talks.map((m) => <TalkCard key={m.id} m={m} />)}</div>
+            </section>
+          )}
+
+          {groups.length > 0 && (
+            <section id="materials" className="sec">
+              <h2>Slides &amp; links</h2>
+              {groups.map((g) => (
+                <div key={g.label} className="mgroup">
+                  <h3 className="sub-h">{g.label}</h3>
+                  <div className="lib">{g.items.map((m) => <MaterialRow key={m.id} m={m} />)}</div>
+                </div>
+              ))}
+            </section>
+          )}
+
+          <section id="ask" className="sec">
+            <h2>Ask the speaker</h2>
+            <AskTheSpeaker eventId={e.id} signedIn={!!user} isTeam={isTeam} displayName={profile?.display_name ?? ""} slug={e.slug} />
           </section>
 
           {team.length > 0 && (
-            <section id="team" className="stack">
-              <h2>Kleros team {past ? "who were there" : "you can meet"}</h2>
+            <section id="team" className="sec">
+              <h2>Kleros team</h2>
+              <p className="muted small">{past ? "Who was there for Kleros." : "Who will be there for Kleros."}</p>
               <div className="team">
-                {team.map(({ team_members: m, part }) => (
+                {team.filter((t) => t.team_members).map(({ team_members: m, part }) => (
                   <div key={m.id} className="person">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <span className="av">{m.avatar_url ? <img src={m.avatar_url} alt="" /> : m.name[0]}</span>
-                    <span><b>{m.name}</b>{(part || m.title) && <span className="muted"> · {part || m.title}</span>}
-                      {m.x_handle && <> · <a href={`https://x.com/${m.x_handle.replace(/^@/, "")}`} target="_blank" rel="noopener">@{m.x_handle.replace(/^@/, "")}</a></>}</span>
+                    <span className="who">
+                      <b>{m.name}</b>
+                      {(part || m.title) && <span className="muted">{part || m.title}</span>}
+                    </span>
+                    {m.x_handle && <a className="x" href={`https://x.com/${m.x_handle.replace(/^@/, "")}`} target="_blank" rel="noopener">@{m.x_handle.replace(/^@/, "")}</a>}
                   </div>
                 ))}
               </div>
@@ -87,62 +142,61 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           )}
 
           {agenda.length > 0 && (
-            <section id="agenda" className="stack">
+            <section id="agenda" className="sec">
               <h2>Agenda</h2>
               <div className="agenda">
                 {agenda.map((a) => (
                   <div key={a.id} className="ag">
                     <span className="tm">{a.starts_at?.slice(0, 5)}</span>
-                    <div><div className={a.is_kleros ? "k" : ""} style={{ fontWeight: 600 }}>{a.title}{a.is_kleros && " · Kleros"}</div>{a.speaker && <div className="muted small">{a.speaker}</div>}</div>
+                    <div>
+                      <div className={a.is_kleros ? "k" : ""} style={{ fontWeight: 600 }}>{a.title}{a.is_kleros && " · Kleros"}</div>
+                      {a.speaker && <div className="muted small">{a.speaker}</div>}
+                    </div>
                   </div>
                 ))}
               </div>
             </section>
           )}
 
-          <section id="talks" className="stack">
-            <h2>Talks &amp; materials</h2>
-            <div className="lib">
-              {talks.map((m) => <MaterialRow key={m.id} m={m} />)}
-              {other.map((m) => <MaterialRow key={m.id} m={m} />)}
-              {!materials.length && <div className="empty"><b>Nothing posted yet</b>{past ? "Slides and recordings are on their way." : "Slides and recordings will be posted here after the event."}</div>}
+          <section id="meet" className="sec">
+            <h2>Meet Kleros</h2>
+            <div className="panel meet">
+              <p>{past
+                ? "Missed the team at this one? Send a request anyway. The team follows up on every one."
+                : "Book time with the team to talk about integrating Kleros, becoming a juror, or partnering."}</p>
+              <div className="row-flex">
+                {booker?.calendar_url && <a className="btn sm primary" href={booker.calendar_url} target="_blank" rel="noopener">Pick a time with {booker.name.split(" ")[0]} ↗</a>}
+              </div>
+              <MeetingForm eventId={e.id} />
             </div>
-          </section>
-
-          <section id="ask" className="stack">
-            <h2>Ask the speaker</h2>
-            <AskTheSpeaker eventId={e.id} signedIn={!!user} isTeam={!!profile?.is_team} displayName={profile?.display_name ?? ""} slug={e.slug} />
+            <div className="prods">
+              {products.map((p) => (
+                <a key={p.name} className="prod" href={p.url} target="_blank" rel="noopener">
+                  <b>{p.name}</b>
+                  <span className="muted small">{p.pitch}</span>
+                  <span className="small">{p.cta} ↗</span>
+                </a>
+              ))}
+            </div>
           </section>
         </div>
 
-        <aside className="stack">
-          <div className="counts">
-            <div><b className="mono">{c.going}</b><span>going</span></div>
-            <div><b className="mono">{c.attended}</b><span>attended</span></div>
-            <div><b className="mono">{talks.length}</b><span>talks</span></div>
+        <aside className="side">
+          <div className="panel">
+            <AttendanceButtons eventId={e.id} past={past} signedIn={!!user} slug={e.slug} />
+            <dl className="kv">
+              <dt>Date</dt><dd>{fmtRange(e.starts_on, e.ends_on)}</dd>
+              {time && <><dt>Time</dt><dd>{time}</dd></>}
+              <dt>Place</dt><dd>{where}</dd>
+              {e.organizer && <><dt>Organiser</dt><dd>{e.organizer}</dd></>}
+              <dt>Kleros</dt><dd>{ROLE_LABEL[e.kleros_role]}</dd>
+              <dt>Format</dt><dd>{e.event_type}</dd>
+              {e.topics.length > 0 && <><dt>Topics</dt><dd>{e.topics.join(", ")}</dd></>}
+              {!past && c.going > 0 && <><dt>Going</dt><dd>{plural(c.going, "person", "people")}</dd></>}
+              {past && c.attended > 0 && <><dt>Attended</dt><dd>{plural(c.attended, "person", "people")}</dd></>}
+              {e.url && <><dt>{past ? "Event page" : "Tickets"}</dt><dd><a href={e.url} target="_blank" rel="noopener">{past ? "Open ↗" : `${ticketLabel} ↗`}</a></dd></>}
+            </dl>
           </div>
-          <AttendanceButtons eventId={e.id} past={past} signedIn={!!user} slug={e.slug} />
-          <dl className="kv">
-            {e.organizer && <><dt>Organizer</dt><dd>{e.organizer}</dd></>}
-            <dt>Kleros</dt><dd>{ROLE_LABEL[e.kleros_role]}</dd>
-            {e.venue && <><dt>Venue</dt><dd>{e.venue}</dd></>}
-            {e.topics.length > 0 && <><dt>Topics</dt><dd>{e.topics.join(", ")}</dd></>}
-            {e.url && <><dt>Tickets</dt><dd><a href={e.url} target="_blank" rel="noopener">Event page ↗</a></dd></>}
-          </dl>
-          <section id="meet" className="meet">
-            <b>{past ? "Missed the team?" : hosted ? "Hosted by Kleros" : "Meet Kleros here"}</b>
-            <span>{past ? "Get in touch anyway. We follow up on every request." : "Book time with the team to talk about integrating Kleros, becoming a juror, or partnering."}</span>
-            {booker?.calendar_url && <a className="btn sm" href={booker.calendar_url} target="_blank" rel="noopener" style={{ color: "var(--fg)" }}>Pick a time with {booker.name.split(" ")[0]} ↗</a>}
-            <MeetingForm eventId={e.id} />
-          </section>
-          {products.map((p) => (
-            <div key={p.name} className="prod">
-              <div className="eyebrow">Relevant to this event</div>
-              <b>{p.name}</b>
-              <span className="muted small">{p.pitch}</span>
-              <a href={p.url} target="_blank" rel="noopener">{p.cta} →</a>
-            </div>
-          ))}
         </aside>
       </div>
     </div>

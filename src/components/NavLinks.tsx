@@ -5,19 +5,14 @@ import { LUMA_URL } from "@/lib/kleros";
 
 export default function NavLinks({ signedIn, isTeam }: { signedIn: boolean; isTeam: boolean }) {
   const path = usePathname();
-  const links = [
-    { href: "/events", label: "Events" },
-    { href: "/talks", label: "Talks & archive" },
-    { href: "/me", label: signedIn ? "My events" : "Sign in" },
-    ...(isTeam ? [{ href: "/admin", label: "Team" }] : []),
-  ];
+  const on = (href: string) => (path === href || path.startsWith(href + "/") ? "page" : undefined);
   return (
     <nav className="nav" aria-label="Main">
-      {links.map((l) => (
-        <Link key={l.href} href={l.href} aria-current={path.startsWith(l.href) ? "page" : undefined}>{l.label}</Link>
-      ))}
+      <Link href="/events" aria-current={on("/events")}>Events</Link>
+      <Link href="/talks" aria-current={on("/talks")}>Talks</Link>
       <a href={LUMA_URL} target="_blank" rel="noopener">Luma ↗</a>
-      <a className="btn sm primary" href="https://kleros.io" target="_blank" rel="noopener">kleros.io ↗</a>
+      {isTeam && <Link href="/admin" aria-current={on("/admin")}>Team</Link>}
+      <Link className="nav-me" href={signedIn ? "/me" : "/login"} aria-current={on("/me") ?? on("/login")}>{signedIn ? "My events" : "Sign in"}</Link>
     </nav>
   );
 }

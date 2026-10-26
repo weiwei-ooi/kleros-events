@@ -1,13 +1,9 @@
-export default function PromoStrip() {
+/** One quiet line for visitors who don't know Kleros yet. */
+export default function PromoStrip({ lead = "New to Kleros?" }: { lead?: string }) {
   return (
-    <div className="promo">
-      <b>New to Kleros?</b>
-      <span className="muted">A decentralized court where randomly drawn jurors settle disputes on-chain.</span>
-      <span className="links">
-        <a className="btn sm" href="https://kleros.io" target="_blank" rel="noopener">kleros.io</a>
-        <a className="btn sm" href="https://court.kleros.io" target="_blank" rel="noopener">Become a juror</a>
-        <a className="btn sm" href="https://x.com/kleros_io" target="_blank" rel="noopener">Follow on X</a>
-      </span>
-    </div>
+    <p className="promo-line">
+      <b>{lead}</b> Kleros is a decentralized court where randomly drawn jurors settle disputes on-chain.{" "}
+      <a href="https://kleros.io" target="_blank" rel="noopener">Learn how it works ↗</a>
+    </p>
   );
 }

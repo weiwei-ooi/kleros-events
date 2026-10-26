@@ -21,9 +21,9 @@ export default function MeetingForm({ eventId }: { eventId: string | null }) {
   }
 
   if (state === "sent") return <div className="ok">Thanks. The Kleros team will reply by email.</div>;
-  if (!open) return <button className="btn sm" style={{ color: "var(--fg)" }} onClick={() => setOpen(true)}>Request a meeting</button>;
+  if (!open) return <button className="btn sm" onClick={() => setOpen(true)}>Request a meeting</button>;
   return (
-    <form onSubmit={submit} className="stack" style={{ gap: 8, background: "var(--surface)", color: "var(--fg)", padding: 12, borderRadius: 8 }}>
+    <form onSubmit={submit} className="stack form-tight">
       <div className="field"><label htmlFor="mr-name">Name</label><input id="mr-name" name="name" required /></div>
       <div className="field"><label htmlFor="mr-email">Email</label><input id="mr-email" name="email" type="email" required /></div>
       <div className="field"><label htmlFor="mr-company">Company or project</label><input id="mr-company" name="company" /></div>

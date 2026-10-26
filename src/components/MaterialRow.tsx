@@ -1,6 +1,7 @@
 import Link from "next/link";
-import type { Material } from "@/lib/types";
-import { fmtDur, fmtSize } from "@/lib/format";
+import type { EventRow, Material, MaterialKind } from "@/lib/types";
+import { fmtDur, fmtRange, fmtSize, plural } from "@/lib/format";
+import Thumb from "./Thumb";
 
 const KIND: Record<string, string> = { talk: "TALK", slides: "PDF", audio: "AUD", video: "VID", doc: "DOC", image: "IMG", link: "URL", social: "POST" };
 
@@ -13,27 +14,91 @@ export function fileUrl(path: string | null | undefined) {
 // Talks people can sit down and watch: slide-synced talks and video recordings.
 export const isWatchable = (m: Pick<Material, "kind">) => m.kind === "talk" || m.kind === "video";
 
+export const driveId = (url: string | null | undefined) =>
+  url?.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:export=\w+&)?id=)([\w-]+)/)?.[1];
+export const youtubeId = (url: string | null | undefined) =>
+  url?.match(/(?:youtube\.com\/(?:watch\?v=|live\/|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/)?.[1];
+
+/** A preview image for a video, when the link points somewhere that has one. */
+export function videoThumb(m: Pick<Material, "kind" | "url">) {
+  if (m.kind !== "video") return null;
+  const d = driveId(m.url);
+  if (d) return `https://drive.google.com/thumbnail?id=${d}&sz=w640`;
+  const y = youtubeId(m.url);
+  if (y) return `https://i.ytimg.com/vi/${y}/hqdefault.jpg`;
+  return null;
+}
+
+/** How the archive and the event page group materials, in display order. */
+export const MATERIAL_GROUPS: { label: string; kinds: MaterialKind[] }[] = [
+  { label: "Slides", kinds: ["slides"] },
+  { label: "Audio", kinds: ["audio"] },
+  { label: "Documents", kinds: ["doc"] },
+  { label: "Photos", kinds: ["image"] },
+  { label: "Links and posts", kinds: ["link", "social"] },
+];
+
+type EventRef = Pick<EventRow, "slug" | "title" | "starts_on">;
+
+/** A watchable talk: preview, title, speaker, event and a clear Watch action. */
+export function TalkCard({ m, event, note }: { m: Material; event?: EventRef; note?: string }) {
+  const href = `/talks/${m.id}`;
+  const detail = m.kind === "talk" ? (m.pages ? plural(m.pages, "slide") + " with audio" : "Slides with audio") : "Video";
+  return (
+    <article className="card talk">
+      <Link className="cover" href={href} aria-label={`Watch ${m.title}`} tabIndex={-1}>
+        <Thumb src={videoThumb(m)} fallback={<span className="cover-fb"><span className="play" aria-hidden>▶</span></span>} />
+        {m.duration_seconds ? <span className="dur mono">{fmtDur(m.duration_seconds)}</span> : null}
+      </Link>
+      <div className="body">
+        <h3><Link href={href}>{m.title}</Link></h3>
+        {m.speaker && <div className="who">{m.speaker}</div>}
+        {event && <Link className="sub" href={`/events/${event.slug}`}>{event.title} · {fmtRange(event.starts_on)}</Link>}
+        {note && <div className="sub">{note}</div>}
+        <div className="foot">
+          <Link className="btn sm primary" href={href}>▶ Watch</Link>
+          <span>{detail}</span>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+/** A compact row for slides, audio, photos, documents, links and posts. */
 export default function MaterialRow({ m, eventTitle, eventSlug }: { m: Material; eventTitle?: string; eventSlug?: string }) {
   const href = m.url || fileUrl(m.file_path);
-  const sub = [eventTitle, m.speaker,
+  const sub = [m.speaker,
     m.kind === "talk" ? `${m.pages ?? "?"} slides${m.duration_seconds ? " · " + fmtDur(m.duration_seconds) : ""}` : "",
-    m.kind !== "talk" ? fmtSize(m.size_bytes) : ""].filter(Boolean).join(" · ");
+    m.kind !== "talk" ? fmtSize(m.size_bytes) : "",
+    m.kind === "link" || m.kind === "social" ? hostOf(m.url) : ""].filter(Boolean).join(" · ");
   return (
     <div className="mrow">
-      <div className={`ico ${m.kind}`}>{KIND[m.kind] ?? "FILE"}</div>
+      {m.kind === "image" && m.file_path
+        // eslint-disable-next-line @next/next/no-img-element
+        ? <a className="ico pic" href={fileUrl(m.file_path)} target="_blank" rel="noopener"><img src={fileUrl(m.file_path)} alt="" loading="lazy" /></a>
+        : <div className={`ico ${m.kind}`} aria-hidden>{KIND[m.kind] ?? "FILE"}</div>}
       <div style={{ minWidth: 0 }}>
         <div className="t">{m.title}</div>
-        <div className="s">{sub}</div>
+        {(sub || eventTitle) && (
+          <div className="s">
+            {sub}
+            {sub && eventTitle && " · "}
+            {eventTitle && (eventSlug ? <Link href={`/events/${eventSlug}`}>{eventTitle}</Link> : eventTitle)}
+          </div>
+        )}
         {m.kind === "audio" && m.file_path && <audio controls preload="none" src={fileUrl(m.file_path)} />}
-        {m.kind === "image" && m.file_path && <img src={fileUrl(m.file_path)} alt={m.title} style={{ maxHeight: 160, borderRadius: 8, marginTop: 6 }} />}
       </div>
       <div className="acts">
         {isWatchable(m) && <Link className="btn sm primary" href={`/talks/${m.id}`}>▶ Watch</Link>}
         {m.kind === "slides" && m.file_path && <Link className="btn sm" href={`/talks/${m.id}`}>View slides</Link>}
         {m.kind === "slides" && !m.file_path && m.url && <a className="btn sm" href={m.url} target="_blank" rel="noopener">View slides ↗</a>}
-        {!isWatchable(m) && m.kind !== "slides" && href && <a className="btn sm" href={href} target="_blank" rel="noopener">Open ↗</a>}
-        {eventSlug && <Link className="btn sm ghost" href={`/events/${eventSlug}`}>Event</Link>}
+        {!isWatchable(m) && m.kind !== "slides" && !(m.kind === "audio" && m.file_path) && href && <a className="btn sm" href={href} target="_blank" rel="noopener">Open ↗</a>}
       </div>
     </div>
   );
+}
+
+function hostOf(url: string | null) {
+  if (!url) return "";
+  try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; }
 }

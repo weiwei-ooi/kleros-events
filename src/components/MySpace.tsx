@@ -8,7 +8,7 @@ import { isPast, fmtDur } from "@/lib/format";
 import { scoreEvent } from "@/lib/recommend";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import EventCard from "./EventCard";
-import MaterialRow from "./MaterialRow";
+import { TalkCard } from "./MaterialRow";
 
 type Att = { event_id: string; status: string; note: string | null };
 type Prog = { material_id: string; position_seconds: number; finished: boolean };
@@ -57,26 +57,25 @@ export default function MySpace({ profile, email, events, materials, attendance,
       </aside>
       <div>
         {watching.length > 0 && (<>
-          <div className="section-h" style={{ marginTop: 0 }}><h2>Continue watching</h2></div>
-          <div className="lib">{watching.map(({ x, m }) => <div key={x.material_id}><MaterialRow m={m!} eventTitle={byId[m!.event_id]?.title} /><div className="muted small mono" style={{ margin: "4px 4px 0" }}>Stopped at {fmtDur(x.position_seconds)}</div></div>)}</div>
+          <div className="section-h first"><h2>Continue watching</h2></div>
+          <div className="grid">{watching.map(({ x, m }) => <TalkCard key={x.material_id} m={m!} event={byId[m!.event_id]} note={`Stopped at ${fmtDur(x.position_seconds)}`} />)}</div>
         </>)}
-        <div className="section-h" style={watching.length ? undefined : { marginTop: 0 }}><div><div className="eyebrow">Picked for you</div><h2>Upcoming events that match your interests</h2></div></div>
+        <div className={watching.length ? "section-h" : "section-h first"}><div><div className="eyebrow">Picked for you</div><h2>Upcoming events that match your interests</h2></div></div>
         <div className="grid">
           {picks.map((x) => <EventCard key={x.e.id} e={x.e} why={x.why} />)}
-          {!picks.length && <div className="empty" style={{ gridColumn: "1/-1" }}><b>No matches yet</b>{p.interests.length ? "Nothing upcoming fits these topics. Try following a few more." : "Follow a few topics to get recommendations."}</div>}
+          {!picks.length && <p className="quiet-empty" style={{ gridColumn: "1/-1" }}>{p.interests.length ? "Nothing upcoming fits these topics yet. Try following a few more." : "Follow a few topics to get recommendations."}</p>}
         </div>
         <div className="section-h"><div><div className="eyebrow">Catch up</div><h2>Talks you missed</h2></div></div>
-        <div className="lib">
-          {missed.map(({ m }) => <MaterialRow key={m.id} m={m} eventTitle={byId[m.event_id]?.title} eventSlug={byId[m.event_id]?.slug} />)}
-          {!missed.length && <div className="empty"><b>You&apos;re caught up</b>Talks from events you missed will show up here.</div>}
-        </div>
+        {missed.length
+          ? <div className="grid">{missed.map(({ m }) => <TalkCard key={m.id} m={m} event={byId[m.event_id]} />)}</div>
+          : <p className="quiet-empty">All caught up. Talks from events you missed will show up here.</p>}
         <div className="section-h">
           <div><div className="eyebrow">Your list</div><h2>Going, saved, attended</h2></div>
           <div className="seg" role="group" aria-label="My list">{(["going", "saved", "attended"] as const).map((t) => <button key={t} aria-pressed={tab === t} onClick={() => setTab(t)}>{t[0].toUpperCase() + t.slice(1)}</button>)}</div>
         </div>
         <div className="grid">
           {mine.map((e) => <EventCard key={e.id} e={e} />)}
-          {!mine.length && <div className="empty" style={{ gridColumn: "1/-1" }}><b>Nothing here yet</b>Open an event and use Save, I&apos;m going or I was there. <Link href="/events">Browse events</Link></div>}
+          {!mine.length && <p className="quiet-empty" style={{ gridColumn: "1/-1" }}>Nothing here yet. Open an event and use Save, I&apos;m going or I was there. <Link href="/events">Browse events</Link></p>}
         </div>
       </div>
     </div>
