@@ -40,15 +40,13 @@ export function EventCover({ e, className = "" }: { e: EventRow; className?: str
   );
 }
 
-export default function EventCard({ e, talks = 0, materials = 0, going = 0, why, mine, wide = false }: {
+export default function EventCard({ e, talks = 0, materials = 0, going = 0, why, mine }: {
   e: EventRow; talks?: number; materials?: number; going?: number; why?: string; mine?: string;
-  /** spans two columns with the cover beside the text (event grids use it to fill the last row) */
-  wide?: boolean;
 }) {
   const status = statusLabel(e);
   const count = talks ? plural(talks, "talk") : materials ? plural(materials, "item") : going ? `${going} going` : "";
   return (
-    <Link className={wide ? "card ev wide" : "card ev"} href={`/events/${e.slug}`}>
+    <Link className="card ev" href={`/events/${e.slug}`}>
       <span className="cover-wrap">
         <EventCover e={e} />
         <span className="on-cover oc-tl"><DateTile iso={e.starts_on} /></span>
@@ -70,5 +68,3 @@ export default function EventCard({ e, talks = 0, materials = 0, going = 0, why,
   );
 }
 
-/** How many leading cards go wide so a three-column grid ends on a full row. */
-export const wideCount = (n: number) => Math.min(n, (3 - (n % 3)) % 3);

@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { EventRow, Material, MaterialKind } from "@/lib/types";
 import { fmtRange, newestFirst, place, plural } from "@/lib/format";
 import { ArchiveRow, TalkCard, isWatchable } from "./MaterialRow";
-import { EventCover, RolePill } from "./EventCard";
+import { EventCover } from "./EventCard";
 
 type Tab = "all" | "talks" | "slides" | "posts";
 const TABS: { v: Tab; label: string; kinds: MaterialKind[] | null }[] = [
@@ -62,27 +62,16 @@ export default function TalkArchive({ materials, events }: { materials: Material
               </div>
               <Link className="btn sm ghost arch-go" href={`/events/${e.slug}`}>Event page →</Link>
             </header>
-            {/* talk cards first; slides, audio and links fill the rest of the last row in one panel */}
-            <div className="media">
+            {/* talk cards first, then slides, audio and links in one panel below */}
+            {watch.length > 0 && <div className="media">
               {watch.map((m) => <TalkCard key={m.id} m={m} event={e} />)}
-              {(rest.length > 0 || watch.length % 3 !== 0) && (
-                <div className={rest.length ? "files" : "files about"} style={{ "--span3": 3 - (watch.length % 3), "--span2": 2 - (watch.length % 2) } as React.CSSProperties}>
-                  {rest.length > 0 ? (
-                    <>
-                      <h3 className="sub-h">Slides, audio and links</h3>
-                      <div className="lib cols">{rest.map((m) => <ArchiveRow key={m.id} m={m} eventSlug={e.slug} />)}</div>
-                    </>
-                  ) : (
-                    <>
-                      <h3 className="sub-h">About the event</h3>
-                      <div className="meta"><RolePill e={e} /><span className="pill plain">{e.event_type}</span></div>
-                      {(e.recap || e.description) && <p className="files-desc">{e.recap || e.description}</p>}
-                    </>
-                  )}
-                  <Link className="files-go" href={`/events/${e.slug}`}>Agenda, questions and the team at {e.title} →</Link>
-                </div>
-              )}
-            </div>
+            </div>}
+            {rest.length > 0 && (
+              <div className="files">
+                <h3 className="sub-h">Slides, audio and links</h3>
+                <div className="lib cols">{rest.map((m) => <ArchiveRow key={m.id} m={m} eventSlug={e.slug} />)}</div>
+              </div>
+            )}
           </section>
         );
       })}
