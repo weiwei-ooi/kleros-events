@@ -14,6 +14,8 @@ export function fileUrl(path: string | null | undefined) {
 
 // Talks people can sit down and watch: slide-synced talks and video recordings.
 export const isWatchable = (m: Pick<Material, "kind">) => m.kind === "talk" || m.kind === "video";
+// What the event page lists under Talks: watchable talks plus recordings saved as audio files.
+export const isTalkLike = (m: Pick<Material, "kind" | "file_path">) => isWatchable(m) || (m.kind === "audio" && !!m.file_path);
 
 export const driveId = (url: string | null | undefined) =>
   url?.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:export=\w+&)?id=)([\w-]+)/)?.[1];
@@ -44,12 +46,13 @@ type EventRef = Pick<EventRow, "slug" | "title" | "starts_on">;
 /** A watchable talk: preview, title, speaker, event and a clear Watch action. */
 export function TalkCard({ m, event, note }: { m: Material; event?: EventRef; note?: string }) {
   const href = `/talks/${m.id}`;
-  const detail = m.kind === "talk" ? (m.pages ? plural(m.pages, "slide") + " with audio" : "Slides with audio") : "Video";
+  const detail = m.kind === "talk" ? (m.pages ? plural(m.pages, "slide") + " with audio" : "Slides with audio") : m.kind === "audio" ? "Audio recording" : "Video";
+  const verb = m.kind === "audio" ? "Listen" : "Watch";
   return (
     <article className="card talk">
-      <Link className="cover" href={href} aria-label={`Watch ${m.title}`} tabIndex={-1}>
+      <Link className="cover" href={href} aria-label={`${verb}: ${m.title}`} tabIndex={-1}>
         <Thumb src={videoThumb(m)} fallback={
-          <GenCover seed={event?.slug ?? m.event_id} className="talk-gen" big={m.speaker ?? undefined} small={m.kind === "talk" ? "Talk with slides" : "Recording"}>
+          <GenCover seed={event?.slug ?? m.event_id ?? m.id} className="talk-gen" big={m.speaker ?? undefined} small={m.kind === "talk" ? "Talk with slides" : "Recording"}>
             <span className="play">▶</span>
           </GenCover>
         } />
@@ -61,7 +64,7 @@ export function TalkCard({ m, event, note }: { m: Material; event?: EventRef; no
         {event && <Link className="sub" href={`/events/${event.slug}`}>{event.title} · {fmtRange(event.starts_on)}</Link>}
         {note && <div className="sub">{note}</div>}
         <div className="foot">
-          <Link className="btn sm primary" href={href}>▶ Watch</Link>
+          <Link className="btn sm primary" href={href}>▶ {verb}</Link>
           <span>{detail}</span>
         </div>
       </div>

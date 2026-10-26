@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { listEvents, listMaterials, eventCounts } from "@/lib/data";
+import { listEvents, listMaterials, eventCounts, eventIdsOf, materialCounts } from "@/lib/data";
 import { fmtRange, isLive, isPast, newestFirst, place, soonestFirst } from "@/lib/format";
 import { LUMA_URL } from "@/lib/kleros";
 import EventCard, { EventCover, RolePill, statusLabel } from "@/components/EventCard";
@@ -17,11 +17,13 @@ export default async function Home() {
   const recent = events.filter(isPast).sort(newestFirst).slice(0, 3);
   const byId = Object.fromEntries(events.map((e) => [e.id, e]));
   // Talks from events the visitor can see, newest event first.
-  const talks = materials.filter((m) => isWatchable(m) && byId[m.event_id])
-    .sort((a, b) => newestFirst(byId[a.event_id], byId[b.event_id]) || b.created_at.localeCompare(a.created_at));
-  const n = (id: string, f: (k: string) => boolean) => materials.filter((m) => m.event_id === id && f(m.kind)).length;
-  const talkCount = (id: string) => n(id, (k) => k === "talk" || k === "video");
-  const itemCount = (id: string) => n(id, () => true);
+  // A talk linked to several events shows with the newest one the visitor can see.
+  const shownWith = (m: (typeof materials)[number]) => eventIdsOf(m).map((id) => byId[id]).filter(Boolean).sort(newestFirst)[0];
+  const talks = materials.filter((m) => isWatchable(m) && shownWith(m))
+    .sort((a, b) => newestFirst(shownWith(a), shownWith(b)) || b.created_at.localeCompare(a.created_at));
+  const perEvent = materialCounts(materials, isWatchable);
+  const talkCount = (id: string) => perEvent.talks[id] ?? 0;
+  const itemCount = (id: string) => perEvent.items[id] ?? 0;
   const cities = new Set(events.filter((e) => e.city).map((e) => e.city)).size;
   const nextStatus = next && statusLabel(next);
 
@@ -85,7 +87,7 @@ export default async function Home() {
         <section className="block">
           <div className="section-h"><h2>Latest talks</h2>{talks.length > 0 && <Link href="/talks">Talk archive →</Link>}</div>
           {talks.length
-            ? <div className="grid">{talks.slice(0, 3).map((m) => <TalkCard key={m.id} m={m} event={byId[m.event_id]} />)}</div>
+            ? <div className="grid">{talks.slice(0, 3).map((m) => <TalkCard key={m.id} m={m} event={shownWith(m)} />)}</div>
             : <p className="quiet-empty">Talks appear here with their slides once the team uploads them after an event.</p>}
         </section>
 

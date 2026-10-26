@@ -5,7 +5,7 @@ import { openPdf, type PdfDoc } from "@/lib/pdf";
 import { addChunk, audioExt, canRecord, dropSession, pickMime, savePdf, saveSession, sessionBlob, sessionPdf, unsavedSessions, type RecSession } from "@/lib/recorder";
 import { fmtDur, fmtSize, slugify } from "@/lib/format";
 import type { SlideMark } from "@/lib/types";
-import { uploadToStorage } from "../admin/MaterialsManager";
+import { uploadToStorage } from "@/lib/materials-client";
 import TalkStage from "../TalkStage";
 import { runTranscript } from "@/lib/transcript/client";
 import type { TranscriptState } from "@/lib/transcript/types";
@@ -62,10 +62,20 @@ function tidy(marks: SlideMark[]): SlideMark[] {
   return out;
 }
 
-export default function Recorder({ eventId, slug, eventTitle, target, onPhase, onDone }: {
-  eventId: string; slug: string; eventTitle: string; target: RecTarget | null;
-  onPhase: (p: RecPhase, title?: string) => void; onDone: () => void;
+/**
+ * The recorder, shared by the host console, the team tools on the event page and /record.
+ * With an event, the recording is saved to that event (and linked to it); with eventId null
+ * it is saved on its own and can be linked to events afterwards (savedExtra renders the
+ * controls for that under "Saved").
+ */
+export default function Recorder({ eventId, slug, eventTitle, target, onPhase, onDone, onSaved, savedExtra }: {
+  eventId: string | null; slug?: string; eventTitle?: string; target: RecTarget | null;
+  onPhase?: (p: RecPhase, title?: string) => void; onDone?: () => void;
+  onSaved?: (id: string, kind: "talk" | "audio") => void;
+  savedExtra?: (id: string, title: string) => React.ReactNode;
 }) {
+  // unsaved recordings kept on this laptop are listed per event; recordings without one share a key
+  const recKey = eventId ?? "standalone";
   const [phase, setPhaseState] = useState<RecPhase>(target ? "setup" : "idle");
   const [title, setTitle] = useState(target?.title ?? "");
   const [speaker, setSpeaker] = useState(target?.speaker ?? "");
@@ -116,7 +126,7 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
   useEffect(() => () => clearTimeout(confirmTimer.current), []);
 
   const setPhase = useCallback((p: RecPhase) => { setPhaseState(p); }, []);
-  useEffect(() => { onPhase(phase, title || target?.title); }, [phase, title, target, onPhase]);
+  useEffect(() => { onPhase?.(phase, title || target?.title); }, [phase, title, target, onPhase]);
   useEffect(() => { setSupported(canRecord()); }, []);
 
   // a new session picked from the agenda (only possible while nothing is recorded)
@@ -129,12 +139,12 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
   // ---------- recovery and other tabs ----------
   const refreshLeftovers = useCallback(async () => {
     try {
-      const all = await unsavedSessions(eventId);
+      const all = await unsavedSessions(recKey);
       const now = Date.now();
       // skip the one in progress here and any that another tab is still writing to
       setLeftovers(all.filter((s) => s.id !== session.current?.id && now - (liveIds.current.get(s.id) ?? 0) > 8000 && now - (s.updatedAt ?? 0) > 12000));
     } catch { setLeftovers([]); }
-  }, [eventId]);
+  }, [recKey]);
   useEffect(() => {
     refreshLeftovers();
     // a tab that crashed seconds ago still looks "in progress"; look again once it has gone quiet
@@ -145,7 +155,7 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
   useEffect(() => {
     if (typeof BroadcastChannel === "undefined") return;
     const bc = new BroadcastChannel(LIVE_PING);
-    bc.onmessage = (e: MessageEvent<{ id: string; eventId: string }>) => {
+    bc.onmessage = (e: MessageEvent<{ id: string; eventId: string | null }>) => {
       if (!e.data?.id || e.data.id === session.current?.id) return;
       liveIds.current.set(e.data.id, Date.now());
       setOtherTab(true);
@@ -329,7 +339,7 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
     chunks.current = []; uploaded.current = {}; setBytes(0); setSecs(0); setSaved(null);
 
     const sess: RecSession = {
-      id: crypto.randomUUID(), eventId, startedAt: Date.now(), mime: mr.mimeType || mime || "audio/webm", seconds: 0,
+      id: crypto.randomUUID(), eventId: recKey, startedAt: Date.now(), mime: mr.mimeType || mime || "audio/webm", seconds: 0,
       title: title.trim(), speaker: speaker.trim(), agendaId: target?.agendaId ?? null,
       marks: marksRef.current, pages: pdf?.numPages, hasPdf: !!(pdf && pdfFile), pdfName, pdfBytes: pdf && pdfFile ? pdfFile.size : 0,
       bytes: 0, updatedAt: Date.now(),
@@ -443,7 +453,7 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
     if (!blob || !session.current) return;
     setErr(""); setPhase("saving");
     const sb = supabaseBrowser();
-    const name = title.trim() || `${eventTitle} recording`;
+    const name = title.trim() || (eventTitle ? `${eventTitle} recording` : "Untitled recording");
     const stamp = new Date(session.current.startedAt).toISOString().slice(0, 16).replace(":", "");
     try {
       const withSlides = !!(pdf && pdfFile);
@@ -455,7 +465,7 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
         setProgress(`Uploading audio (${fmtSize(blob.size)})…`);
         uploaded.current.audio = await uploadToStorage(eventId, blob, `${slugify(name) || "recording"}-${stamp}.${audioExt(blob.type)}`);
       }
-      setProgress("Saving to the event…");
+      setProgress(eventId ? "Saving to the event…" : "Saving…");
       const base = { event_id: eventId, title: name, speaker: speaker.trim() || null, duration_seconds: Math.round(secs) };
       const row: Record<string, unknown> = withSlides
         ? { ...base, kind: "talk", pdf_path: uploaded.current.pdf, audio_path: uploaded.current.audio, pages: pdf!.numPages, marks: tidy(marks.length ? marks : [{ p: 1, t: 0 }]), size_bytes: blob.size + pdfFile!.size }
@@ -467,6 +477,7 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
       setSaved({ id, kind: withSlides ? "talk" : "audio" });
       setPhase("saved");
       transcribe(id);
+      onSaved?.(id, withSlides ? "talk" : "audio");
     } catch (e) {
       const raw = (e as Error).message || "unknown error";
       const msg = /failed to fetch|network|load failed/i.test(raw) ? "the server could not be reached (check the wifi)" : raw;
@@ -493,7 +504,7 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
     if (!blob) return;
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `${slug}-${slugify(title) || "recording"}.${audioExt(blob.type)}`;
+    a.download = `${slug || "kleros"}-${slugify(title) || "recording"}.${audioExt(blob.type)}`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
   }
@@ -516,7 +527,7 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
     reset(); setPhase(target ? "setup" : "idle"); refreshLeftovers();
   }
 
-  function finish() { reset(); setPhase("idle"); refreshLeftovers(); onDone(); }
+  function finish() { reset(); setPhase("idle"); refreshLeftovers(); onDone?.(); }
 
   // ---------- view ----------
   const recording = phase === "recording" || phase === "stopping";
@@ -565,7 +576,7 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
     <section className={`con-panel rec ${recording ? "is-rec" : ""}`} aria-labelledby="rec-h">
       <div className="con-panel-h">
         <div className="rec-title">
-          <div className="eyebrow">{target?.agendaId ? `Session${target.time ? ` · ${target.time}` : ""}` : "Session not on the agenda"}</div>
+          <div className="eyebrow">{target?.agendaId ? `Session${target.time ? ` · ${target.time}` : ""}` : eventId ? "Session not on the agenda" : "Recording"}</div>
           <h2 id="rec-h">{title || target?.title || "New recording"}</h2>
           {(speaker || target?.speaker) && phase !== "review" && <div className="muted small">{speaker || target?.speaker}</div>}
         </div>
@@ -650,7 +661,7 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
           ) : (
             <div className="rec-audio-only">
               <b>Recording audio only</b>
-              <span className="muted small">Slides can be synced later from the event admin page with the talk builder.</span>
+              <span className="muted small">{eventId ? "Slides can be attached and synced later from the event page, under Talks." : "Slides can be attached later, once the recording is linked to an event."}</span>
             </div>
           )}
           {!backup && <div className="note">This browser is not keeping a backup copy (a private window, or storage is full). Keep this tab open until the recording is saved.</div>}
@@ -673,7 +684,7 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
               }} />
           )}
           <div className="two">
-            <div className="field"><label htmlFor="rv-t">Title</label><input id="rv-t" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={`${eventTitle} recording`} disabled={phase === "saving"} /></div>
+            <div className="field"><label htmlFor="rv-t">Title</label><input id="rv-t" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={eventTitle ? `${eventTitle} recording` : "What this recording is called"} disabled={phase === "saving"} /></div>
             <div className="field"><label htmlFor="rv-s">Speaker</label><input id="rv-s" value={speaker} onChange={(e) => setSpeaker(e.target.value)} placeholder="Full name" disabled={phase === "saving"} /></div>
           </div>
           <div className="rec-facts mono small">
@@ -686,7 +697,7 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
             </div>
           )}
           <div className="rec-actions">
-            <button className="btn primary" onClick={save} disabled={phase === "saving"}>{phase === "saving" ? progress || "Saving…" : pdf ? "Save talk to event" : "Save recording to event"}</button>
+            <button className="btn primary" onClick={save} disabled={phase === "saving"}>{phase === "saving" ? progress || "Saving…" : `${pdf ? "Save talk" : "Save recording"}${eventId ? " to event" : ""}`}</button>
             <button className="btn" onClick={download} disabled={phase === "saving"}>Download copy</button>
             <span className="spacer" />
             <button className="btn ghost danger" onClick={discard} disabled={phase === "saving"}>{confirm === "discard" ? "Discard for good?" : "Discard"}</button>
@@ -696,11 +707,15 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
 
       {phase === "saved" && saved && (
         <div className="rec-saved">
-          <div className="ok">Saved to the event. {saved.kind === "talk" ? "It plays with the slides in sync on the talk page." : "It is listed with the event's recordings."}</div>
+          <div className="ok">
+            {eventId ? "Saved to the event. " : "Saved to the recordings library. "}
+            {saved.kind === "talk" ? "It plays with the slides in sync on the talk page." : eventId ? "It is listed with the event's recordings." : "Link it to one or more events so it shows on their pages."}
+          </div>
           {tx && <TxLine s={tx} href={`/talks/${saved.id}`} />}
+          {savedExtra?.(saved.id, title.trim() || (eventTitle ? `${eventTitle} recording` : "Untitled recording"))}
           <div className="row-flex">
             <a className="btn" href={`/talks/${saved.id}`} target="_blank" rel="noopener">Open the talk ↗</a>
-            <button className="btn primary" onClick={finish}>Record another session</button>
+            <button className="btn primary" onClick={finish}>{eventId ? "Record another session" : "Record something else"}</button>
           </div>
         </div>
       )}

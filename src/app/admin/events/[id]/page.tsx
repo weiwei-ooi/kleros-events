@@ -2,13 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireTeam } from "@/lib/admin";
 import { supabaseServer } from "@/lib/supabase/server";
+import { eventMaterials } from "@/lib/data";
 import { fmtRange, place } from "@/lib/format";
 import NotTeam from "@/components/NotTeam";
 import EventForm from "@/components/admin/EventForm";
 import AgendaEditor from "@/components/admin/AgendaEditor";
 import TeamPicker from "@/components/admin/TeamPicker";
 import MaterialsManager from "@/components/admin/MaterialsManager";
-import type { AgendaItem, EventRow, Material, TeamMember } from "@/lib/types";
+import type { AgendaItem, EventRow, TeamMember } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ export default async function EditEventPage({ params }: { params: Promise<{ id: 
     sb.from("agenda_items").select("*").eq("event_id", id).order("starts_at"),
     sb.from("event_team").select("team_member_id, part").eq("event_id", id),
     sb.from("team_members").select("*").eq("active", true).order("sort"),
-    sb.from("materials").select("*").eq("event_id", id).order("created_at"),
+    eventMaterials(sb, id),
   ]);
   const e = event as EventRow;
   const sections = [
@@ -72,7 +73,7 @@ export default async function EditEventPage({ params }: { params: Promise<{ id: 
         </section>
         <section id="materials" className="ed-sec">
           <div className="ed-sec-h"><h2>Materials</h2><p className="muted small">Talks, slides, recordings and links, listed on the event page and in the archive.</p></div>
-          <MaterialsManager event={e} initial={(materials.data ?? []) as Material[]} />
+          <MaterialsManager event={e} initial={materials} />
         </section>
       </div>
     </div>

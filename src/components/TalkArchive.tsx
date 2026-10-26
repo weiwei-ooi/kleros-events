@@ -23,16 +23,18 @@ export default function TalkArchive({ materials, events }: { materials: Material
   const kinds = TABS.find((t) => t.v === tab)!.kinds;
   const needle = q.trim().toLowerCase();
 
-  const list = materials.filter((m) => {
-    const e = byId[m.event_id];
-    if (!e) return false;
+  // A material linked to several events is listed under each of them.
+  const evs = (m: Material) => (m.event_ids ?? (m.event_id ? [m.event_id] : [])).map((id) => byId[id]).filter(Boolean);
+  const pairs = materials.flatMap((m) => evs(m).map((e) => ({ m, e })));
+  const list = pairs.filter(({ m, e }) => {
     if (kinds && !kinds.includes(m.kind)) return false;
     if (needle && ![m.title, m.speaker, e.title, e.city, e.country].join(" ").toLowerCase().includes(needle)) return false;
     return true;
   });
-  const groups = [...new Set(list.map((m) => m.event_id))].map((id) => byId[id]).sort(newestFirst)
-    .map((e) => ({ e, items: list.filter((m) => m.event_id === e.id).sort((a, b) => a.created_at.localeCompare(b.created_at)) }));
-  const tabCount = (t: (typeof TABS)[number]) => materials.filter((m) => byId[m.event_id] && (!t.kinds || t.kinds.includes(m.kind))).length;
+  const groups = [...new Set(list.map(({ e }) => e.id))].map((id) => byId[id]).sort(newestFirst)
+    .map((e) => ({ e, items: list.filter((x) => x.e.id === e.id).map((x) => x.m).sort((a, b) => a.created_at.localeCompare(b.created_at)) }));
+  const tabCount = (t: (typeof TABS)[number]) => materials.filter((m) => evs(m).length && (!t.kinds || t.kinds.includes(m.kind))).length;
+  const shown = new Set(list.map(({ m }) => m.id)).size;
 
   return (
     <div className="browser">
@@ -45,7 +47,7 @@ export default function TalkArchive({ materials, events }: { materials: Material
         <input className="search" type="search" placeholder="Search by title, speaker or event" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search the archive" />
       </div>
       <div className="result-line" role="status">
-        <span>{plural(list.length, "item")} from {plural(groups.length, "event")}</span>
+        <span>{plural(shown, "item")} from {plural(groups.length, "event")}</span>
         {needle && <button className="link-btn" onClick={() => setQ("")}>Clear search</button>}
       </div>
 

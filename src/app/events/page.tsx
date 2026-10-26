@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { listEvents, listMaterials, eventCounts } from "@/lib/data";
+import { listEvents, listMaterials, eventCounts, materialCounts } from "@/lib/data";
 import EventBrowser, { type View, type When } from "@/components/EventBrowser";
 import { isWatchable } from "@/components/MaterialRow";
 import SetupNotice from "@/components/SetupNotice";
@@ -10,12 +10,7 @@ export const revalidate = 60;
 
 export default async function EventsPage({ searchParams }: { searchParams: Promise<{ when?: string; view?: string }> }) {
   const [{ when, view }, events, materials, attendance] = await Promise.all([searchParams, listEvents(), listMaterials(), eventCounts()]);
-  const talks: Record<string, number> = {};
-  const items: Record<string, number> = {};
-  for (const m of materials) {
-    items[m.event_id] = (items[m.event_id] ?? 0) + 1;
-    if (isWatchable(m)) talks[m.event_id] = (talks[m.event_id] ?? 0) + 1;
-  }
+  const { talks, items } = materialCounts(materials, isWatchable);
   const going = Object.fromEntries(Object.entries(attendance).map(([id, c]) => [id, c.going]));
   const initialWhen: When = when === "upcoming" || when === "past" ? when : "all";
   const initialView: View = view === "calendar" ? "calendar" : "list";

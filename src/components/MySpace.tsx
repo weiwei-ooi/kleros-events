@@ -22,6 +22,8 @@ export default function MySpace({ profile, email, events, materials, attendance,
   const [tab, setTab] = useState<"going" | "saved" | "attended">("going");
   const status = Object.fromEntries(attendance.map((a) => [a.event_id, a.status]));
   const byId = Object.fromEntries(events.map((e) => [e.id, e]));
+  // the first linked event the visitor can see
+  const evOf = (m: Material) => (m.event_ids ?? (m.event_id ? [m.event_id] : [])).map((id) => byId[id]).find(Boolean);
 
   async function update(patch: Partial<Profile>) {
     const next = { ...p, ...patch }; setP(next); setSaved("Saving…");
@@ -36,8 +38,8 @@ export default function MySpace({ profile, email, events, materials, attendance,
     .filter((x) => x.score > 0 || !p.interests.length).sort((a, b) => b.score - a.score || a.e.starts_on.localeCompare(b.e.starts_on)).slice(0, 6);
   const watching = progress.filter((x) => !x.finished).map((x) => ({ x, m: materials.find((m) => m.id === x.material_id) })).filter((r) => r.m);
   const watched = new Set(progress.map((x) => x.material_id));
-  const missed = materials.filter((m) => m.kind === "talk" && !watched.has(m.id) && byId[m.event_id] && status[m.event_id] !== "attended")
-    .map((m) => ({ m, s: scoreEvent(byId[m.event_id], p).score })).filter((r) => r.s > 0 || !p.interests.length).sort((a, b) => b.s - a.s).slice(0, 5);
+  const missed = materials.filter((m) => m.kind === "talk" && !watched.has(m.id) && evOf(m) && status[evOf(m)!.id] !== "attended")
+    .map((m) => ({ m, s: scoreEvent(evOf(m)!, p).score })).filter((r) => r.s > 0 || !p.interests.length).sort((a, b) => b.s - a.s).slice(0, 5);
   const mine = events.filter((e) => status[e.id] === tab).sort((a, b) => a.starts_on.localeCompare(b.starts_on));
 
   return (
@@ -58,7 +60,7 @@ export default function MySpace({ profile, email, events, materials, attendance,
       <div>
         {watching.length > 0 && (<>
           <div className="section-h first"><h2>Continue watching</h2></div>
-          <div className="grid">{watching.map(({ x, m }) => <TalkCard key={x.material_id} m={m!} event={byId[m!.event_id]} note={`Stopped at ${fmtDur(x.position_seconds)}`} />)}</div>
+          <div className="grid">{watching.map(({ x, m }) => <TalkCard key={x.material_id} m={m!} event={evOf(m!)} note={`Stopped at ${fmtDur(x.position_seconds)}`} />)}</div>
         </>)}
         <div className={watching.length ? "section-h" : "section-h first"}><div><div className="eyebrow">Picked for you</div><h2>Upcoming events that match your interests</h2></div></div>
         <div className="grid">
@@ -67,7 +69,7 @@ export default function MySpace({ profile, email, events, materials, attendance,
         </div>
         <div className="section-h"><div><div className="eyebrow">Catch up</div><h2>Talks you missed</h2></div></div>
         {missed.length
-          ? <div className="grid">{missed.map(({ m }) => <TalkCard key={m.id} m={m} event={byId[m.event_id]} />)}</div>
+          ? <div className="grid">{missed.map(({ m }) => <TalkCard key={m.id} m={m} event={evOf(m)} />)}</div>
           : <p className="quiet-empty">All caught up. Talks from events you missed will show up here.</p>}
         <div className="section-h">
           <div><div className="eyebrow">Your list</div><h2>Going, saved, attended</h2></div>

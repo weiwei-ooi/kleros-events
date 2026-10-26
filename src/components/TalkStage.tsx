@@ -132,6 +132,10 @@ export default function TalkStage({ pdf, mode, audioUrl, marks, notes, onNotes, 
           <span className="mono small">{page} / {pages}</span>
           <button className="btn sm" onClick={() => go(page + 1)}>{mode === "sync" ? "Next slide → (mark here)" : "Next slide ›"}</button>
           <span style={{ flex: 1 }} />
+          {mode === "sync" && onCaptured && ms.length > 1 && (
+            <button className="btn sm" onClick={() => { const a = audio.current; a?.pause(); onCaptured({ marks: sorted(), duration: dur || knownDuration || a?.currentTime || 0 }); }}
+              title="Stop here and keep the slide changes marked so far; the last slide stays up until the end">Done marking</button>
+          )}
           {mode === "record" && (
             <span className={`row-flex ${recState === "rec" ? "recording" : ""}`}>
               <span className="dot" /><b className="mono">{fmtDur(recState === "rec" ? time : 0)}</b>

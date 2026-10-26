@@ -23,13 +23,15 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const sb = await supabaseServer();
   const [ev, mats, reqs, counts] = await Promise.all([
     sb.from("events").select("*").order("starts_on", { ascending: true }),
-    sb.from("materials").select("event_id"),
+    sb.from("material_events").select("event_id"),
     sb.from("meeting_requests").select("*, events(title, slug)").order("created_at", { ascending: false }).limit(200),
     sb.from("event_counts").select("*"),
   ]);
   const events = (ev.data ?? []) as EventRow[];
+  // links (0006); before that migration, count by materials.event_id
+  const linkRows = mats.error ? (await sb.from("materials").select("event_id")).data : mats.data;
   const matCount: Record<string, number> = {};
-  for (const m of (mats.data ?? []) as { event_id: string }[]) matCount[m.event_id] = (matCount[m.event_id] ?? 0) + 1;
+  for (const m of (linkRows ?? []) as { event_id: string | null }[]) if (m.event_id) matCount[m.event_id] = (matCount[m.event_id] ?? 0) + 1;
   const going: Record<string, number> = Object.fromEntries(
     ((counts.data ?? []) as { event_id: string; going: number }[]).map((c) => [c.event_id, c.going]),
   );
