@@ -228,7 +228,9 @@ grant execute on function team_directory() to authenticated;
 revoke execute on function sync_team_for_email(text) from public, anon, authenticated;
 -- internal helpers: would reveal who is granted or blocked
 revoke execute on function team_status_for(text, boolean, boolean) from public, anon, authenticated;
-revoke execute on function is_master_user(uuid) from public, anon, authenticated;
+revoke execute on function is_master_user(uuid) from public, anon;
+-- protect_profile_flags runs as the caller and needs it; it only says whether one id is the master.
+grant execute on function is_master_user(uuid) to authenticated;
 
 -- ---------- existing accounts ----------
 -- Keep anyone with a confirmed email who was given team access by hand before this migration.
