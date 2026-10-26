@@ -1,35 +1,20 @@
 import Link from "next/link";
 import { listEvents, listMaterials, eventCounts } from "@/lib/data";
-import { isPast, newestFirst, soonestFirst } from "@/lib/format";
-import type { EventRow } from "@/lib/types";
+import { fmtRange, isLive, isPast, newestFirst, place, soonestFirst } from "@/lib/format";
 import { LUMA_URL } from "@/lib/kleros";
-import EventCard from "@/components/EventCard";
+import EventCard, { EventCover, RolePill, statusLabel } from "@/components/EventCard";
 import { TalkCard, isWatchable } from "@/components/MaterialRow";
 import PromoStrip from "@/components/PromoStrip";
 import SetupNotice from "@/components/SetupNotice";
 
 export const revalidate = 60;
 
-/**
- * Takes events in order until two rows of the three-column grid are full. A card with a
- * cover spans two rows (see globals.css), so it uses two slots.
- */
-function twoRows(list: EventRow[], slots = 6) {
-  const out: EventRow[] = [];
-  let used = 0;
-  for (const e of list) {
-    const cost = e.cover_path ? 2 : 1;
-    if (used + cost > slots) break;
-    out.push(e); used += cost;
-    if (used === slots) break;
-  }
-  return out;
-}
-
 export default async function Home() {
   const [events, materials, counts] = await Promise.all([listEvents(), listMaterials(), eventCounts()]);
   const upcoming = events.filter((e) => !isPast(e)).sort(soonestFirst);
-  const recent = twoRows(events.filter(isPast).sort(newestFirst));
+  const next = upcoming[0];
+  const later = upcoming.slice(1, 4);
+  const recent = events.filter(isPast).sort(newestFirst).slice(0, 3);
   const byId = Object.fromEntries(events.map((e) => [e.id, e]));
   // Talks from events the visitor can see, newest event first.
   const talks = materials.filter((m) => isWatchable(m) && byId[m.event_id])
@@ -38,50 +23,79 @@ export default async function Home() {
   const talkCount = (id: string) => n(id, (k) => k === "talk" || k === "video");
   const itemCount = (id: string) => n(id, () => true);
   const cities = new Set(events.filter((e) => e.city).map((e) => e.city)).size;
+  const nextStatus = next && statusLabel(next);
 
   return (
-    <div className="wrap">
-      <SetupNotice />
-      <section className="intro">
-        <div className="eyebrow">Kleros Events</div>
-        <h1>Where Kleros shows up, <em>and what was said there.</em></h1>
-        <p className="lede">The events Kleros hosts, sponsors and speaks at. Find the next one, rewatch past talks with their slides, and ask the speakers questions.</p>
-        <div className="row-flex actions">
-          <a className="btn primary" href={LUMA_URL} target="_blank" rel="noopener">Follow Kleros on Luma ↗</a>
-          <Link className="btn" href="/events">Browse all events</Link>
+    <>
+      <div className="hero-band">
+        <div className="wrap hero">
+          <div className="hero-copy">
+            <SetupNotice />
+            <div className="eyebrow">Kleros on stage and on the road</div>
+            <h1 className="hero-title">Where Kleros shows up, <em>and what was said there.</em></h1>
+            <p className="lede">The events Kleros hosts, sponsors and speaks at. Find the next one, rewatch past talks with their slides, ask the speakers questions and meet the team.</p>
+            <div className="row-flex actions">
+              <a className="btn cta" href={LUMA_URL} target="_blank" rel="noopener">Follow Kleros on Luma ↗</a>
+              <Link className="btn" href="/talks">Watch the talks</Link>
+            </div>
+            {events.length > 0 && (
+              <dl className="stats">
+                <div className="stat"><dt>upcoming</dt><dd>{upcoming.length}</dd></div>
+                <div className="stat"><dt>events on record</dt><dd>{events.length}</dd></div>
+                <div className="stat"><dt>recorded talks</dt><dd>{talks.length}</dd></div>
+                {cities > 0 && <div className="stat"><dt>cities</dt><dd>{cities}</dd></div>}
+              </dl>
+            )}
+          </div>
+          {next && (
+            <Link className="feature" href={`/events/${next.slug}`}>
+              <EventCover e={next} />
+              <span className="feature-body">
+                <span className="eyebrow accent">{isLive(next) ? "Happening now" : "Next up"}</span>
+                <h2>{next.title}</h2>
+                <span className="when">{fmtRange(next.starts_on, next.ends_on)}{next.start_time ? ` · ${next.start_time.slice(0, 5)}` : ""} · {place(next)}</span>
+                <span className="meta">
+                  <RolePill e={next} />
+                  <span className="pill plain">{next.event_type}</span>
+                  {nextStatus && nextStatus.cls !== "live" && <span className={`pill ${nextStatus.cls}`}>{nextStatus.text}</span>}
+                </span>
+                <span className="feature-go">See the event →</span>
+              </span>
+            </Link>
+          )}
         </div>
-        {events.length > 0 && (
-          <dl className="facts">
-            <div><dt>Upcoming</dt><dd>{upcoming.length}</dd></div>
-            <div><dt>Events on record</dt><dd>{events.length}</dd></div>
-            <div><dt>Recorded talks</dt><dd>{talks.length}</dd></div>
-            {cities > 0 && <div><dt>Cities</dt><dd>{cities}</dd></div>}
-          </dl>
+      </div>
+
+      <div className="wrap">
+        <PromoStrip />
+
+        {later.length > 0 && (
+          <section className="block">
+            <div className="section-h"><h2>Coming up</h2><Link href="/events?when=upcoming">All upcoming →</Link></div>
+            <div className="grid">{later.map((e) => <EventCard key={e.id} e={e} talks={talkCount(e.id)} materials={itemCount(e.id)} going={counts[e.id]?.going} />)}</div>
+          </section>
         )}
-      </section>
+        {!upcoming.length && (
+          <section className="block">
+            <div className="section-h"><h2>Coming up</h2></div>
+            <p className="quiet-empty">No upcoming events announced yet. New ones are posted on <a href={LUMA_URL} target="_blank" rel="noopener">Luma</a> first.</p>
+          </section>
+        )}
 
-      <section className="block">
-        <div className="section-h"><h2>Coming up</h2><Link href="/events?when=upcoming">All upcoming →</Link></div>
-        {upcoming.length
-          ? <div className="grid">{twoRows(upcoming).map((e) => <EventCard key={e.id} e={e} talks={talkCount(e.id)} materials={itemCount(e.id)} going={counts[e.id]?.going} />)}</div>
-          : <p className="quiet-empty">No upcoming events announced yet. New ones are posted on <a href={LUMA_URL} target="_blank" rel="noopener">Luma</a> first.</p>}
-      </section>
-
-      {recent.length > 0 && (
         <section className="block">
-          <div className="section-h"><h2>Recent events</h2><Link href="/events?when=past">All past events →</Link></div>
-          <div className="grid">{recent.map((e) => <EventCard key={e.id} e={e} talks={talkCount(e.id)} materials={itemCount(e.id)} />)}</div>
+          <div className="section-h"><h2>Latest talks</h2>{talks.length > 0 && <Link href="/talks">Talk archive →</Link>}</div>
+          {talks.length
+            ? <div className="grid">{talks.slice(0, 3).map((m) => <TalkCard key={m.id} m={m} event={byId[m.event_id]} />)}</div>
+            : <p className="quiet-empty">Talks appear here with their slides once the team uploads them after an event.</p>}
         </section>
-      )}
 
-      <section className="block">
-        <div className="section-h"><h2>Latest talks</h2>{talks.length > 0 && <Link href="/talks">All talks →</Link>}</div>
-        {talks.length
-          ? <div className="grid">{talks.slice(0, 6).map((m) => <TalkCard key={m.id} m={m} event={byId[m.event_id]} />)}</div>
-          : <p className="quiet-empty">Talks appear here with their slides once the team uploads them after an event.</p>}
-      </section>
-
-      <PromoStrip />
-    </div>
+        {recent.length > 0 && (
+          <section className="block">
+            <div className="section-h"><h2>Recently</h2><Link href="/events?when=past">All past events →</Link></div>
+            <div className="grid">{recent.map((e) => <EventCard key={e.id} e={e} talks={talkCount(e.id)} materials={itemCount(e.id)} />)}</div>
+          </section>
+        )}
+      </div>
+    </>
   );
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { EventRow, Material, MaterialKind } from "@/lib/types";
 import { fmtDur, fmtRange, fmtSize, plural } from "@/lib/format";
 import Thumb from "./Thumb";
+import GenCover from "./Cover";
 
 const KIND: Record<string, string> = { talk: "TALK", slides: "PDF", audio: "AUD", video: "VID", doc: "DOC", image: "IMG", link: "URL", social: "POST" };
 
@@ -47,7 +48,11 @@ export function TalkCard({ m, event, note }: { m: Material; event?: EventRef; no
   return (
     <article className="card talk">
       <Link className="cover" href={href} aria-label={`Watch ${m.title}`} tabIndex={-1}>
-        <Thumb src={videoThumb(m)} fallback={<span className="cover-fb"><span className="play" aria-hidden>▶</span></span>} />
+        <Thumb src={videoThumb(m)} fallback={
+          <GenCover seed={event?.slug ?? m.event_id} className="talk-gen" big={m.speaker ?? undefined} small={m.kind === "talk" ? "Talk with slides" : "Recording"}>
+            <span className="play">▶</span>
+          </GenCover>
+        } />
         {m.duration_seconds ? <span className="dur mono">{fmtDur(m.duration_seconds)}</span> : null}
       </Link>
       <div className="body">

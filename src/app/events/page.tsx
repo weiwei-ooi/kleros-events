@@ -20,14 +20,18 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
   const initialWhen: When = when === "upcoming" || when === "past" ? when : "all";
   const initialView: View = view === "calendar" ? "calendar" : "list";
   return (
-    <div className="wrap page">
-      <SetupNotice />
-      <header className="page-head">
-        <div className="eyebrow">Events</div>
-        <h1>Where to find <em>Kleros</em></h1>
-        <p className="lede">Conferences, meetups and workshops where Kleros hosts, speaks or has a booth, with the talks and slides from each one.</p>
-      </header>
-      <EventBrowser events={events} counts={{ talks, materials: items, going }} initialWhen={initialWhen} initialView={initialView} initialMonth={todayIso().slice(0, 7)} />
-    </div>
+    <>
+      <div className="page-band"><div className="wrap">
+        <SetupNotice />
+        <header className="page-head">
+          <div className="eyebrow">Events</div>
+          <h1>Where to find <em>Kleros</em></h1>
+          <p className="lede">Conferences, meetups and workshops where Kleros hosts, speaks or has a booth, with the talks and slides from each one.</p>
+        </header>
+      </div></div>
+      <div className="wrap page">
+        <EventBrowser events={events} counts={{ talks, materials: items, going }} initialWhen={initialWhen} initialView={initialView} initialMonth={todayIso().slice(0, 7)} />
+      </div>
+    </>
   );
 }

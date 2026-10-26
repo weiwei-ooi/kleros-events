@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getEvent, eventCounts } from "@/lib/data";
-import { fmtRange, isPast, place, plural } from "@/lib/format";
+import { fmtRange, isPast, place } from "@/lib/format";
 import { ROLE_LABEL, productsFor } from "@/lib/kleros";
-import { statusLabel } from "@/components/EventCard";
-import MaterialRow, { MATERIAL_GROUPS, TalkCard, fileUrl, isWatchable } from "@/components/MaterialRow";
+import { EventCover, RolePill, statusLabel } from "@/components/EventCard";
+import MaterialRow, { MATERIAL_GROUPS, TalkCard, isWatchable } from "@/components/MaterialRow";
 import AttendanceButtons from "@/components/AttendanceButtons";
 import AskTheSpeaker from "@/components/AskTheSpeaker";
 import MeetingForm from "@/components/MeetingForm";
@@ -40,6 +40,14 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   const hasAbout = !!(e.description || e.recap);
   const ticketLabel = e.url && /luma\.com|lu\.ma/.test(e.url) ? "RSVP on Luma" : "Get tickets";
 
+  const stats = ([
+    past ? [c.attended, "attended"] : [c.going, "going"],
+    [talks.length, talks.length === 1 ? "talk" : "talks"],
+    [otherCount, otherCount === 1 ? "file or link" : "files and links"],
+    [agenda.length, agenda.length === 1 ? "agenda item" : "agenda items"],
+    [team.length, "from Kleros"],
+  ] as [number, string][]).filter(([n]) => n > 0).slice(0, 3);
+
   const sections = [
     hasAbout && ["about", "About"],
     talks.length > 0 && ["talks", `Talks (${talks.length})`],
@@ -51,14 +59,15 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   ].filter(Boolean) as [string, string][];
 
   return (
-    <div className="wrap">
-      <header className={e.cover_path ? "ev-head with-cover" : "ev-head"}>
+    <>
+    <div className="ev-band">
+      <header className="wrap ev-head">
         <div className="ev-title">
           <Link className="back" href="/events">← All events</Link>
-          <div className="labels">
-            <span className="role">{ROLE_LABEL[e.kleros_role]}</span>
-            <span>{e.event_type}</span>
-            {status ? <span className={`pill ${status.cls}`}>{status.text}</span> : past ? <span>Ended</span> : null}
+          <div className="meta">
+            <RolePill e={e} />
+            <span className="pill plain">{e.event_type}</span>
+            {status ? <span className={`pill ${status.cls}`}>{status.text}</span> : past ? <span className="pill plain">Ended</span> : null}
           </div>
           <h1>{e.title}</h1>
           <div className="when-where">
@@ -67,17 +76,17 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           </div>
           {(e.url && !past) || isTeam ? (
             <div className="row-flex">
-              {e.url && !past && <a className="btn primary" href={e.url} target="_blank" rel="noopener">{ticketLabel} ↗</a>}
+              {e.url && !past && <a className="btn cta" href={e.url} target="_blank" rel="noopener">{ticketLabel} ↗</a>}
               {isTeam && <Link className="btn" href={`/events/${e.slug}/host`}>Run this event</Link>}
               {isTeam && <Link className="btn ghost" href={`/admin/events/${e.id}`}>Edit</Link>}
             </div>
           ) : null}
           {e.status === "draft" && <div className="note">Draft. Only the Kleros team can see this event until it is published.</div>}
         </div>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        {e.cover_path && <img className="ev-cover" src={fileUrl(e.cover_path)} alt="" />}
+        <EventCover e={e} className="ev-cover" />
       </header>
-
+    </div>
+    <div className="wrap">
       <nav className="anchors" aria-label="On this page">
         {sections.map(([id, label]) => <a key={id} href={`#${id}`}>{label}</a>)}
       </nav>
@@ -100,7 +109,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           {talks.length > 0 && (
             <section id="talks" className="sec">
               <h2>Talks</h2>
-              <div className="grid two-up">{talks.map((m) => <TalkCard key={m.id} m={m} />)}</div>
+              <div className="grid two-up">{talks.map((m) => <TalkCard key={m.id} m={m} event={e} />)}</div>
             </section>
           )}
 
@@ -183,18 +192,23 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
 
         <aside className="side">
           <div className="panel">
+            {stats.length > 0 && (
+              <div className="counts">
+                {stats.map(([n, label]) => <div key={label}><b>{n}</b><span>{label}</span></div>)}
+              </div>
+            )}
             <AttendanceButtons eventId={e.id} past={past} signedIn={!!user} slug={e.slug} />
             <dl className="kv">
               {e.organizer && <><dt>Organiser</dt><dd>{e.organizer}</dd></>}
               <dt>Format</dt><dd>{e.event_type}</dd>
               {e.topics.length > 0 && <><dt>Topics</dt><dd>{e.topics.join(", ")}</dd></>}
-              {!past && c.going > 0 && <><dt>Going</dt><dd>{plural(c.going, "person", "people")}</dd></>}
-              {past && c.attended > 0 && <><dt>Attended</dt><dd>{plural(c.attended, "person", "people")}</dd></>}
+              <dt>Kleros</dt><dd>{ROLE_LABEL[e.kleros_role]}</dd>
               {past && e.url && <><dt>Event page</dt><dd><a href={e.url} target="_blank" rel="noopener">Open ↗</a></dd></>}
             </dl>
           </div>
         </aside>
       </div>
     </div>
+    </>
   );
 }

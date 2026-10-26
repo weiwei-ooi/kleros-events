@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { EventRow } from "@/lib/types";
-import EventCard from "./EventCard";
+import EventCard, { wideCount } from "./EventCard";
 import { EVENT_TYPES, LUMA_URL, TOPICS } from "@/lib/kleros";
 import { endOf, isPast, newestFirst, plural, soonestFirst, todayIso } from "@/lib/format";
 
@@ -107,8 +107,8 @@ function Timeline({ title, list, counts, empty }: { title?: string; list: EventR
     <section className="timeline">
       {title && <h2 className="tl-h">{title} <span className="count">{list.length}</span></h2>}
       {list.length ? (
-        <div className="grid">
-          {list.map((e) => <EventCard key={e.id} e={e} talks={counts.talks[e.id]} materials={counts.materials[e.id]} going={isPast(e) ? 0 : counts.going[e.id]} />)}
+        <div className="ev-grid">
+          {list.map((e, i) => <EventCard key={e.id} e={e} wide={i < wideCount(list.length)} talks={counts.talks[e.id]} materials={counts.materials[e.id]} going={isPast(e) ? 0 : counts.going[e.id]} />)}
         </div>
       ) : <p className="quiet-empty">{empty}</p>}
     </section>
@@ -128,8 +128,8 @@ function MonthList({ month, events, counts }: { month: Date; events: EventRow[];
     <section className="timeline">
       <h3 className="month-h">{list.length ? `${plural(list.length, "event")} in ${label}` : `Nothing on record for ${label}`}</h3>
       {list.length > 0 && (
-        <div className="grid">
-          {list.map((e) => <EventCard key={e.id} e={e} talks={counts.talks[e.id]} materials={counts.materials[e.id]} going={isPast(e) ? 0 : counts.going[e.id]} />)}
+        <div className="ev-grid">
+          {list.map((e, i) => <EventCard key={e.id} e={e} wide={i < wideCount(list.length)} talks={counts.talks[e.id]} materials={counts.materials[e.id]} going={isPast(e) ? 0 : counts.going[e.id]} />)}
         </div>
       )}
     </section>
