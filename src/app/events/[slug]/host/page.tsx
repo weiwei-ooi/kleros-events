@@ -37,7 +37,7 @@ export default async function HostPage({ params }: { params: Promise<{ slug: str
   const { event, agenda } = data;
   return (
     <HostConsole
-      event={{ id: event.id, slug: event.slug, title: event.title, starts_on: event.starts_on, ends_on: event.ends_on, venue: event.venue, city: event.city }}
+      event={{ id: event.id, slug: event.slug, title: event.title, starts_on: event.starts_on, ends_on: event.ends_on, venue: event.venue, city: event.city, status: event.status }}
       agenda={agenda}
       joinUrl={`${SITE_URL}/q/${slug}`}
     />

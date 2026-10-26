@@ -38,7 +38,7 @@ export default function QuickAsk({ eventId, title, slug }: { eventId: string; ti
       const me = await ensureUser();
       const sb = supabaseBrowser();
       const { data, error } = await sb.from("questions")
-        .insert({ event_id: eventId, body: text, anonymous: !name.trim(), author_id: me.id, author_name: name.trim() || null })
+        .insert({ event_id: eventId, body: text, anonymous: !name.trim(), author_id: me.id, author_name: name.trim().slice(0, 60) || null })
         .select("id").single();
       if (error) throw error;
       await sb.from("question_votes").insert({ question_id: data.id, user_id: me.id });
@@ -99,7 +99,7 @@ export default function QuickAsk({ eventId, title, slug }: { eventId: string; ti
         <p className="muted small">Tap the arrow on the questions that should be answered first.</p>
         <div className="qa-list">
           {list.map((q) => {
-            const mine = uid && q.author_id === uid;
+            const mine = q.mine ?? (!!uid && q.author_id === uid);
             return (
               <article key={q.id} className={`qa-item ${q.featured ? "is-feat" : ""} ${q.status === "answered" ? "is-done" : ""}`}>
                 <button className={`qa-vote ${myVotes.has(q.id) ? "on" : ""}`} onClick={() => vote(q)} disabled={voting === q.id}

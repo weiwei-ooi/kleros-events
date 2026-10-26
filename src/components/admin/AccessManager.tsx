@@ -73,7 +73,7 @@ export default function AccessManager({ rows, myId }: { rows: AccessRow[]; myId:
   }
 
   function source(r: AccessRow) {
-    if (r.is_admin) return <span className="pill host">Master admin</span>;
+    if (r.is_admin) return <span className="pill host">{r.email === "weiwei@kleros.io" ? "Master admin" : "Admin"}</span>;
     if (r.blocked) return <span className="pill ex">Blocked</span>;
     if (r.kleros_email) return <span className="pill plain">@kleros.io</span>;
     if (r.granted) return <span className="pill part">Added by email</span>;

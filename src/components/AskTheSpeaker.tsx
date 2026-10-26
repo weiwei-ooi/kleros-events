@@ -29,11 +29,14 @@ export default function AskTheSpeaker({ eventId, signedIn, isTeam, displayName, 
   useEffect(() => {
     load();
     const sb = supabaseBrowser();
+    // votes cannot be filtered by event, so reload once 1.5 s after the last vote anywhere
+    let voteTimer: ReturnType<typeof setTimeout> | undefined;
+    const onVote = () => { clearTimeout(voteTimer); voteTimer = setTimeout(load, 1500); };
     const ch = sb.channel(`qa-${eventId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "questions", filter: `event_id=eq.${eventId}` }, load)
-      .on("postgres_changes", { event: "*", schema: "public", table: "question_votes" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "question_votes" }, onVote)
       .subscribe();
-    return () => { sb.removeChannel(ch); };
+    return () => { sb.removeChannel(ch); clearTimeout(voteTimer); };
   }, [eventId, load]);
 
   async function ask(e: React.FormEvent) {
@@ -41,7 +44,7 @@ export default function AskTheSpeaker({ eventId, signedIn, isTeam, displayName, 
     const sb = supabaseBrowser();
     let me = uid;
     try { me = (await ensureUser()).id; setUid(me); } catch (x) { setErr((x as Error).message); return; }
-    const named = !anon && (signedIn ? displayName : guestName.trim());
+    const named = !anon && (signedIn ? displayName : guestName.trim()).slice(0, 60);
     const { data, error } = await sb.from("questions").insert({ event_id: eventId, body: body.trim(), anonymous: !named, author_id: me, author_name: named || null }).select("id").single();
     if (error) { setErr(error.message); return; }
     if (data) await sb.from("question_votes").insert({ question_id: data.id, user_id: me });
@@ -57,8 +60,10 @@ export default function AskTheSpeaker({ eventId, signedIn, isTeam, displayName, 
   }
   async function moderate(q: Question, patch: Partial<Question>) {
     const sb = supabaseBrowser();
-    if (patch.featured) await sb.from("questions").update({ featured: false }).eq("event_id", eventId);
-    await sb.from("questions").update(patch).eq("id", q.id);
+    const { error } = patch.featured !== undefined
+      ? await sb.rpc("feature_question", { p_question: q.id, p_on: patch.featured })
+      : await sb.from("questions").update(patch.status && patch.status !== "open" ? { ...patch, featured: false } : patch).eq("id", q.id);
+    if (error) setErr(error.message);
     load();
   }
 

@@ -48,3 +48,12 @@ export const soonestFirst = <T extends Pick<EventRow, "starts_on">>(a: T, b: T) 
 export const newestFirst = <T extends Pick<EventRow, "starts_on">>(a: T, b: T) => b.starts_on.localeCompare(a.starts_on);
 
 export const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * A same-site path to go to after sign-in, or /me. Rejects `//evil.com` and `/\evil.com`
+ * (both leave the site) and control characters, which URL parsers strip (`/\t/evil.com`).
+ */
+export function safeNext(next: unknown, fallback = "/me"): string {
+  if (typeof next !== "string") return fallback;
+  return /^\/(?![\/\\])/.test(next) && !/[\x00-\x1f\x7f\\]/.test(next) ? next : fallback;
+}

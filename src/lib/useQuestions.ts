@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { supabaseBrowser } from "./supabase/client";
 import type { Question } from "./types";
 
+const VOTE_DEBOUNCE_MS = 1500;
+
 // Live questions for one event, kept current over realtime, plus the viewer's own votes.
 // `live` is false while the realtime channel is down; a slow poll keeps lists honest anyway.
 export function useQuestions(eventId: string) {
@@ -43,9 +45,13 @@ export function useQuestions(eventId: string) {
   useEffect(() => {
     load();
     const sb = supabaseBrowser();
+    // question_votes has no event_id to filter on, so every vote on any event arrives here.
+    // Coalesce them into one reload 1.5 s after the last one instead of reloading per vote.
+    let voteTimer: ReturnType<typeof setTimeout> | undefined;
+    const onVote = () => { clearTimeout(voteTimer); voteTimer = setTimeout(load, VOTE_DEBOUNCE_MS); };
     const ch = sb.channel(`q-${eventId}-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "questions", filter: `event_id=eq.${eventId}` }, load)
-      .on("postgres_changes", { event: "*", schema: "public", table: "question_votes" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "question_votes" }, onVote)
       .subscribe((status) => {
         if (status === "SUBSCRIBED") { setLive(true); load(); }
         else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") setLive(false);
@@ -54,7 +60,7 @@ export function useQuestions(eventId: string) {
     const t = setInterval(load, 15000);
     const onFocus = () => document.visibilityState === "visible" && load();
     document.addEventListener("visibilitychange", onFocus);
-    return () => { sb.removeChannel(ch); clearInterval(t); document.removeEventListener("visibilitychange", onFocus); };
+    return () => { sb.removeChannel(ch); clearInterval(t); clearTimeout(voteTimer); document.removeEventListener("visibilitychange", onFocus); };
   }, [eventId, load]);
 
   return { questions, myVotes, uid, loaded, live, error, reload: load };

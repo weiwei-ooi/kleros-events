@@ -83,6 +83,8 @@ export interface Question {
   featured: boolean;
   created_at: string;
   votes: number;
+  /** from question_scores: the signed-in viewer wrote it (author_id is null for anonymous questions) */
+  mine?: boolean;
 }
 
 export interface Profile {

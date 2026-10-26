@@ -13,7 +13,7 @@ import { useScreenMode } from "./useScreenMode";
 const LOCKED: RecPhase[] = ["starting", "recording", "stopping", "review", "saving"];
 
 export default function HostConsole({ event, agenda, joinUrl }: {
-  event: { id: string; slug: string; title: string; starts_on: string; ends_on: string | null; venue: string | null; city: string | null };
+  event: { id: string; slug: string; title: string; starts_on: string; ends_on: string | null; venue: string | null; city: string | null; status?: "draft" | "published" };
   agenda: AgendaItem[];
   joinUrl: string;
 }) {
@@ -49,6 +49,9 @@ export default function HostConsole({ event, agenda, joinUrl }: {
           <div className="eyebrow">Host console</div>
           <h1 className="con-h1">{event.title}</h1>
           <div className="muted small">{[when, event.venue, event.city].filter(Boolean).join(" · ")}</div>
+          {event.status === "draft" && (
+            <div className="note" role="status" style={{ marginTop: 8 }}>This event is a draft. The phone and big screen pages still work.</div>
+          )}
         </div>
         <div className="con-stats" aria-label="Live counts">
           {recording && <span className="con-rec" title={recTitle}><span className="dot" /> Recording</span>}

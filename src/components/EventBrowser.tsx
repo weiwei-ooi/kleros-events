@@ -12,15 +12,17 @@ type Counts = { talks: Record<string, number>; materials: Record<string, number>
 
 const WHEN: [When, string][] = [["all", "All"], ["upcoming", "Upcoming"], ["past", "Past"]];
 
-export default function EventBrowser({ events, counts, initialWhen = "all", initialView = "list" }: {
+export default function EventBrowser({ events, counts, initialWhen = "all", initialView = "list", initialMonth }: {
   events: EventRow[]; counts: Counts; initialWhen?: When; initialView?: View;
+  /** "YYYY-MM" computed on the server, so the calendar renders the same month on server and client */
+  initialMonth: string;
 }) {
   const [when, setWhen] = useState<When>(initialWhen);
   const [view, setView] = useState<View>(initialView);
   const [type, setType] = useState("");
   const [topic, setTopic] = useState("");
   const [q, setQ] = useState("");
-  const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1, 12); });
+  const [month, setMonth] = useState(() => { const [y, m] = initialMonth.split("-").map(Number); return new Date(y, m - 1, 1, 12); });
 
   // Keep the address shareable without reloading the page.
   useEffect(() => {

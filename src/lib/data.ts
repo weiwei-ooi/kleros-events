@@ -40,6 +40,20 @@ export async function getEvent(slug: string) {
   };
 }
 
+export type LiveEvent = Pick<EventRow, "id" | "slug" | "title" | "starts_on" | "ends_on" | "venue" | "city" | "status">;
+
+/**
+ * The few fields the phone ask page and the big screen need, for any event including drafts
+ * (0004 live_event). Falls back to the regular lookup when the function is not there yet.
+ */
+export async function getLiveEvent(slug: string): Promise<LiveEvent | null> {
+  if (!supabaseConfigured) return null;
+  const sb = await supabaseServer();
+  const { data, error } = await sb.rpc("live_event", { p_slug: slug });
+  if (!error) return ((data ?? []) as LiveEvent[])[0] ?? null;
+  return (await getEvent(slug))?.event ?? null;
+}
+
 export async function getMaterial(id: string) {
   if (!supabaseConfigured) return null;
   const sb = await supabaseServer();

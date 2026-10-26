@@ -28,13 +28,15 @@ export default function QuestionsPanel({ eventId, questions, loaded, live, error
     setErr(""); setBusy(q.id);
     const sb = supabaseBrowser();
     try {
-      if (patch.featured) {
-        const { error: e } = await sb.from("questions").update({ featured: false }).eq("event_id", eventId).eq("featured", true);
+      if (patch.featured !== undefined && patch.status === undefined) {
+        // one atomic call: takes any other question off the big screen in the same transaction
+        const { error: e } = await sb.rpc("feature_question", { p_question: q.id, p_on: patch.featured });
+        if (e) throw e;
+      } else {
+        if (patch.status && patch.status !== "open") patch = { ...patch, featured: false };
+        const { error: e } = await sb.from("questions").update(patch).eq("id", q.id);
         if (e) throw e;
       }
-      if (patch.status && patch.status !== "open") patch = { ...patch, featured: false };
-      const { error: e } = await sb.from("questions").update(patch).eq("id", q.id);
-      if (e) throw e;
       if (patch.featured) onFeatured();
       nudgeScreen(eventId, { type: "questions" });
     } catch (e) { setErr(`That change did not go through: ${(e as Error).message}`); }

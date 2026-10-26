@@ -3,6 +3,7 @@ import { listEvents, listMaterials, eventCounts } from "@/lib/data";
 import EventBrowser, { type View, type When } from "@/components/EventBrowser";
 import { isWatchable } from "@/components/MaterialRow";
 import SetupNotice from "@/components/SetupNotice";
+import { todayIso } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Events" };
 export const revalidate = 60;
@@ -26,7 +27,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
         <h1>Where to find <em>Kleros</em></h1>
         <p className="lede">Conferences, meetups and workshops where Kleros hosts, speaks or has a booth, with the talks and slides from each one.</p>
       </header>
-      <EventBrowser events={events} counts={{ talks, materials: items, going }} initialWhen={initialWhen} initialView={initialView} />
+      <EventBrowser events={events} counts={{ talks, materials: items, going }} initialWhen={initialWhen} initialView={initialView} initialMonth={todayIso().slice(0, 7)} />
     </div>
   );
 }

@@ -15,7 +15,7 @@ export default async function AccessPage() {
     <header className="adm-head">
       <div>
         <h1>Access</h1>
-        <p className="muted">Anyone signing in with an @kleros.io email is an admin. Add other people by email.</p>
+        <p className="muted">Anyone signing in with a confirmed @kleros.io email gets team access: they can create events and run them from the host console. Wei Wei is the master admin and the only one who can give access to other people by email or remove it.</p>
       </div>
     </header>
   );

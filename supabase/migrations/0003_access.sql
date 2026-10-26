@@ -1,18 +1,26 @@
 -- Access: who can use the Kleros team desk (/admin).
 --
--- Rule: a profile is team when
---   it is the master admin (weiwei@kleros.io), or
---   its email is listed in team_access and not blocked, or
---   its email ends with @kleros.io and is not blocked in team_access.
--- Anonymous guests (QR questions) have no email and are never team.
+-- Rule: a profile is admin when
+--   its confirmed email is the master admin's (weiwei@kleros.io), or
+--   profiles.admin_by_sql is true (set by hand from SQL, never from the API).
+-- A profile is team when
+--   it is admin, or
+--   its email is confirmed and listed in team_access and not blocked, or
+--   its email is confirmed, ends with @kleros.io and is not blocked in team_access.
+-- An unconfirmed email never grants anything: Supabase magic-link sign-up inserts
+-- the user first and sets email_confirmed_at on the first click, and the update
+-- trigger below grants access at that moment.
+-- Anonymous guests (QR questions) have no confirmed email and are never team.
 -- Only admins can grant, block or remove access. Nobody can change their own
--- is_team / is_admin, and is_admin can only be changed from SQL, not the API.
+-- is_team / is_admin / admin_by_sql, and admin_by_sql can only be changed from SQL:
+--   update profiles set admin_by_sql = true where id = '<user id>';
 --
 -- Safe to run once on a database that already has 0001, 0002 and the content SQL,
 -- and safe to re-run.
 
 -- ---------- columns and table ----------
 alter table profiles add column if not exists is_admin boolean not null default false;
+alter table profiles add column if not exists admin_by_sql boolean not null default false;
 
 create table if not exists team_access (
   email text primary key check (email = lower(email) and email like '%_@_%'),
@@ -31,11 +39,24 @@ language sql stable security definer set search_path = public as $$
   select coalesce((select is_admin from profiles where id = auth.uid()), false)
 $$;
 
--- The access rule in one place.
-create or replace function team_status_for(p_email text, p_is_admin boolean) returns boolean
+-- True when this auth user has confirmed the master admin email.
+create or replace function is_master_user(p_user uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from auth.users u
+     where u.id = p_user
+       and lower(u.email) = master_admin_email()
+       and u.email_confirmed_at is not null
+  )
+$$;
+
+-- The access rule in one place. p_confirmed: the email has been confirmed.
+drop function if exists team_status_for(text, boolean);
+create or replace function team_status_for(p_email text, p_confirmed boolean, p_is_admin boolean) returns boolean
 language sql stable security definer set search_path = public as $$
   select case
     when coalesce(p_is_admin, false) then true
+    when not coalesce(p_confirmed, false) then false
     when p_email is null or p_email = '' then false
     else coalesce(
       (select not ta.blocked from team_access ta where ta.email = lower(p_email)),
@@ -44,28 +65,30 @@ language sql stable security definer set search_path = public as $$
   end
 $$;
 
--- Recompute is_team for every profile whose auth email matches.
+-- Recompute is_team for every profile whose auth email matches. An unconfirmed
+-- email gets no access from a grant (team_status_for returns false for it).
 create or replace function sync_team_for_email(p_email text) returns void
 language sql security definer set search_path = public as $$
   update profiles p
-     set is_team = team_status_for(u.email, p.is_admin)
+     set is_team = team_status_for(u.email, u.email_confirmed_at is not null, p.is_admin)
     from auth.users u
    where u.id = p.id
      and lower(u.email) = lower(p_email)
-     and p.is_team is distinct from team_status_for(u.email, p.is_admin)
+     and p.is_team is distinct from team_status_for(u.email, u.email_confirmed_at is not null, p.is_admin)
 $$;
 
 -- ---------- new sign-ups ----------
 create or replace function handle_new_user() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare
-  v_admin boolean := coalesce(lower(new.email) = master_admin_email(), false);
+  v_confirmed boolean := new.email_confirmed_at is not null;
+  v_admin boolean := v_confirmed and coalesce(lower(new.email) = master_admin_email(), false);
 begin
   insert into profiles (id, display_name, is_team, is_admin)
-  values (new.id, split_part(new.email, '@', 1), team_status_for(new.email, v_admin), v_admin)
+  values (new.id, split_part(new.email, '@', 1), team_status_for(new.email, v_confirmed, v_admin), v_admin)
   on conflict (id) do update
-    set is_admin = profiles.is_admin or excluded.is_admin,
-        is_team  = team_status_for(new.email, profiles.is_admin or excluded.is_admin);
+    set is_admin = profiles.admin_by_sql or excluded.is_admin,
+        is_team  = team_status_for(new.email, v_confirmed, profiles.admin_by_sql or excluded.is_admin);
   return new;
 end $$;
 
@@ -73,20 +96,25 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users
   for each row execute function handle_new_user();
 
--- An email change (confirmed in Supabase Auth) re-applies the rule.
+-- An email change or a confirmation (the first magic-link click) re-applies the rule.
+-- Admin from the master email is recomputed, so changing away from it drops admin;
+-- admin_by_sql is kept.
 create or replace function handle_user_email_change() returns trigger
 language plpgsql security definer set search_path = public as $$
+declare
+  v_confirmed boolean := new.email_confirmed_at is not null;
+  v_master boolean := v_confirmed and coalesce(lower(new.email) = master_admin_email(), false);
 begin
   update profiles p
-     set is_admin = p.is_admin or coalesce(lower(new.email) = master_admin_email(), false),
-         is_team  = team_status_for(new.email, p.is_admin or coalesce(lower(new.email) = master_admin_email(), false))
+     set is_admin = v_master or p.admin_by_sql,
+         is_team  = team_status_for(new.email, v_confirmed, v_master or p.admin_by_sql)
    where p.id = new.id;
   return new;
 end $$;
 
 drop trigger if exists on_auth_user_email_changed on auth.users;
-create trigger on_auth_user_email_changed after update of email on auth.users
-  for each row when (old.email is distinct from new.email)
+create trigger on_auth_user_email_changed after update of email, email_confirmed_at on auth.users
+  for each row when (old.email is distinct from new.email or old.email_confirmed_at is distinct from new.email_confirmed_at)
   execute function handle_user_email_change();
 
 -- ---------- grants and blocks apply to existing accounts at once ----------
@@ -116,20 +144,22 @@ create trigger team_access_defaults before insert or update on team_access
   for each row execute function team_access_defaults();
 
 -- ---------- protect the flags ----------
--- From the API (roles anon / authenticated): nobody changes is_admin, and only
--- admins change is_team. Triggers above run as the owner, so they pass.
--- The master admin is always team.
+-- From the API (roles anon / authenticated): nobody changes is_admin or
+-- admin_by_sql, and only admins change is_team. Triggers above run as the owner,
+-- so they pass. is_admin is always derived (confirmed master email or admin_by_sql),
+-- so it cannot stick after an email change. Admins are always team.
 create or replace function protect_profile_flags() returns trigger
 language plpgsql as $$
 begin
   if current_user in ('anon', 'authenticated') then
-    if new.is_admin is distinct from old.is_admin then
-      raise exception 'is_admin can only be changed by the database owner' using errcode = '42501';
+    if new.is_admin is distinct from old.is_admin or new.admin_by_sql is distinct from old.admin_by_sql then
+      raise exception 'admin rights can only be changed by the database owner' using errcode = '42501';
     end if;
     if new.is_team is distinct from old.is_team and not is_admin() then
       raise exception 'only admins can change team access' using errcode = '42501';
     end if;
   end if;
+  new.is_admin := coalesce(new.admin_by_sql, false) or is_master_user(new.id);
   if new.is_admin then new.is_team := true; end if;
   return new;
 end $$;
@@ -196,21 +226,25 @@ end $$;
 revoke execute on function team_directory() from public, anon;
 grant execute on function team_directory() to authenticated;
 revoke execute on function sync_team_for_email(text) from public, anon, authenticated;
+-- internal helpers: would reveal who is granted or blocked
+revoke execute on function team_status_for(text, boolean, boolean) from public, anon, authenticated;
+revoke execute on function is_master_user(uuid) from public, anon, authenticated;
 
 -- ---------- existing accounts ----------
--- Keep anyone who was given team access by hand before this migration.
+-- Keep anyone with a confirmed email who was given team access by hand before this migration.
 insert into team_access (email, note)
 select lower(u.email), 'Kept from manual access before 0003'
   from profiles p join auth.users u on u.id = p.id
- where p.is_team and u.email is not null
+ where p.is_team and u.email is not null and u.email_confirmed_at is not null
    and lower(u.email) not like '%@kleros.io'
    and lower(u.email) <> master_admin_email()
 on conflict (email) do nothing;
 
-update profiles p set is_admin = true
-  from auth.users u
- where u.id = p.id and lower(u.email) = master_admin_email() and not p.is_admin;
+-- is_admin is recomputed by protect_profile_flags on every update.
+update profiles p set is_admin = (p.admin_by_sql or is_master_user(p.id))
+ where p.is_admin is distinct from (p.admin_by_sql or is_master_user(p.id));
 
-update profiles p set is_team = team_status_for(u.email, p.is_admin)
+update profiles p set is_team = team_status_for(u.email, u.email_confirmed_at is not null, p.is_admin)
   from auth.users u
- where u.id = p.id and p.is_team is distinct from team_status_for(u.email, p.is_admin);
+ where u.id = p.id
+   and p.is_team is distinct from team_status_for(u.email, u.email_confirmed_at is not null, p.is_admin);
