@@ -37,11 +37,10 @@ export default function QuickAsk({ eventId, title, slug }: { eventId: string; ti
     try {
       const me = await ensureUser();
       const sb = supabaseBrowser();
-      const { data, error } = await sb.from("questions")
-        .insert({ event_id: eventId, body: text, anonymous: !name.trim(), author_id: me.id, author_name: name.trim().slice(0, 60) || null })
-        .select("id").single();
+      // no automatic upvote of one's own question: votes are public, so it would reveal who asked
+      const { error } = await sb.from("questions")
+        .insert({ event_id: eventId, body: text, anonymous: !name.trim(), author_id: me.id, author_name: name.trim().slice(0, 60) || null });
       if (error) throw error;
-      await sb.from("question_votes").insert({ question_id: data.id, user_id: me.id });
       try { localStorage.setItem("ke-ask-name", name.trim()); } catch { /* storage blocked */ }
       setBody(""); setSent(true); setTimeout(() => setSent(false), 5000);
       reload();
@@ -68,7 +67,7 @@ export default function QuickAsk({ eventId, title, slug }: { eventId: string; ti
   const left = MAX - body.length;
 
   return (
-    <div className="wrap qa">
+    <div className="wrap qa qa-page">
       <header className="qa-head">
         <div className="eyebrow">Ask the speakers</div>
         <h1>{title}</h1>
@@ -78,10 +77,8 @@ export default function QuickAsk({ eventId, title, slug }: { eventId: string; ti
         <label className="lbl" htmlFor="qa-body">Your question</label>
         <textarea id="qa-body" className="qa-box" value={body} onChange={(e) => setBody(e.target.value.slice(0, MAX))}
           placeholder="Type a question for the speakers" maxLength={MAX} rows={4} required />
-        <div className="qa-row">
-          <input className="qa-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name (optional)" maxLength={40} aria-label="Your name, optional" autoComplete="name" />
-          <span className={`qa-count mono ${left < 30 ? "low" : ""}`} aria-live="polite">{left}</span>
-        </div>
+        <span className={`qa-count ${left < 30 ? "low" : ""}`} aria-live="polite">{left} {left === 1 ? "character" : "characters"} left</span>
+        <input className="qa-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name (optional)" maxLength={40} aria-label="Your name, optional" autoComplete="name" />
         <button className="btn primary qa-send" type="submit" disabled={busy || body.trim().length < 3}>{busy ? "Sending…" : "Send question"}</button>
         <p className="muted small qa-fine">No account needed. Leave the name empty to ask anonymously.</p>
         {sent && <div className="ok" role="status">Sent. It is in the list below and on the big screen.</div>}

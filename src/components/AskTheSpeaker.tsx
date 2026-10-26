@@ -45,9 +45,9 @@ export default function AskTheSpeaker({ eventId, signedIn, isTeam, displayName, 
     let me = uid;
     try { me = (await ensureUser()).id; setUid(me); } catch (x) { setErr((x as Error).message); return; }
     const named = !anon && (signedIn ? displayName : guestName.trim()).slice(0, 60);
-    const { data, error } = await sb.from("questions").insert({ event_id: eventId, body: body.trim(), anonymous: !named, author_id: me, author_name: named || null }).select("id").single();
+    // no automatic upvote of one's own question: votes are public, so it would reveal who asked
+    const { error } = await sb.from("questions").insert({ event_id: eventId, body: body.trim(), anonymous: !named, author_id: me, author_name: named || null });
     if (error) { setErr(error.message); return; }
-    if (data) await sb.from("question_votes").insert({ question_id: data.id, user_id: me });
     setBody(""); load();
   }
   async function vote(q: Question) {
@@ -58,15 +58,6 @@ export default function AskTheSpeaker({ eventId, signedIn, isTeam, displayName, 
     else await sb.from("question_votes").insert({ question_id: q.id, user_id: me });
     load();
   }
-  async function moderate(q: Question, patch: Partial<Question>) {
-    const sb = supabaseBrowser();
-    const { error } = patch.featured !== undefined
-      ? await sb.rpc("feature_question", { p_question: q.id, p_on: patch.featured })
-      : await sb.from("questions").update(patch.status && patch.status !== "open" ? { ...patch, featured: false } : patch).eq("id", q.id);
-    if (error) setErr(error.message);
-    load();
-  }
-
   const list = questions.filter((q) => q.status !== "hidden").sort((a, b) =>
     sort === "new" ? b.created_at.localeCompare(a.created_at) : Number(a.status === "answered") - Number(b.status === "answered") || b.votes - a.votes);
 
@@ -75,7 +66,7 @@ export default function AskTheSpeaker({ eventId, signedIn, isTeam, displayName, 
       <form className="row-flex" onSubmit={ask}>
         <input className="search" value={body} onChange={(e) => setBody(e.target.value)} placeholder="Ask the Kleros speakers a question" maxLength={280} minLength={3} required aria-label="Your question" />
         {signedIn
-          ? <label className="muted small"><input type="checkbox" checked={anon} onChange={(e) => setAnon(e.target.checked)} /> anonymous</label>
+          ? <label className="muted small"><input type="checkbox" checked={anon} onChange={(e) => setAnon(e.target.checked)} /> Ask anonymously</label>
           : <input className="search" style={{ flex: "0 1 160px" }} value={guestName} onChange={(e) => setGuestName(e.target.value)} placeholder="Your name (optional)" maxLength={40} aria-label="Your name" />}
         <button className="btn primary sm" type="submit">Ask</button>
       </form>
@@ -83,6 +74,7 @@ export default function AskTheSpeaker({ eventId, signedIn, isTeam, displayName, 
       <div className="row-flex">
         <div className="seg" role="group" aria-label="Sort"><button aria-pressed={sort === "top"} onClick={() => setSort("top")}>Top</button><button aria-pressed={sort === "new"} onClick={() => setSort("new")}>Newest</button></div>
         <Link className="btn sm ghost" href={`/q/${slug}`}>Ask from your phone</Link>
+        {isTeam && <Link className="btn sm" href={`/events/${slug}/host`} style={{ marginLeft: "auto" }}>Moderate in host console</Link>}
       </div>
       {list.map((q) => (
         <div key={q.id} className={`q ${q.featured ? "feat" : ""} ${q.status === "answered" ? "done" : ""}`}>
@@ -90,13 +82,6 @@ export default function AskTheSpeaker({ eventId, signedIn, isTeam, displayName, 
           <div style={{ minWidth: 0 }}>
             <div style={{ overflowWrap: "anywhere" }}>{q.body}</div>
             <div className="by">{q.anonymous || !q.author_name ? "Anonymous" : q.author_name}{q.featured ? " · on screen" : ""}{q.status === "answered" ? " · answered" : ""}</div>
-            {isTeam && (
-              <div className="row-flex" style={{ marginTop: 8 }}>
-                <button className="btn sm" onClick={() => moderate(q, { featured: !q.featured })}>{q.featured ? "Take off screen" : "Show on screen"}</button>
-                <button className="btn sm ghost" onClick={() => moderate(q, { status: q.status === "answered" ? "open" : "answered" })}>{q.status === "answered" ? "Reopen" : "Mark answered"}</button>
-                <button className="btn sm ghost" onClick={() => moderate(q, { status: "hidden" })}>Hide</button>
-              </div>
-            )}
           </div>
         </div>
       ))}

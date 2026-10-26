@@ -1,10 +1,15 @@
 import { supabaseServer, supabaseConfigured } from "./supabase/server";
 import type { AgendaItem, EventRow, EventTeamRow, Material } from "./types";
 
+/**
+ * Published events, for the public listings (home, /events, /talks, /me). RLS lets the team
+ * read drafts too, so filter here; the desk (/admin) runs its own query that includes drafts,
+ * and getEvent still opens a draft's page directly for the team.
+ */
 export async function listEvents(): Promise<EventRow[]> {
   if (!supabaseConfigured) return [];
   const sb = await supabaseServer();
-  const { data } = await sb.from("events").select("*").order("starts_on", { ascending: true });
+  const { data } = await sb.from("events").select("*").eq("status", "published").order("starts_on", { ascending: true });
   return (data ?? []) as EventRow[];
 }
 
