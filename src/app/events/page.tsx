@@ -1,22 +1,32 @@
 import type { Metadata } from "next";
 import { listEvents, listMaterials, eventCounts } from "@/lib/data";
-import EventBrowser from "@/components/EventBrowser";
+import EventBrowser, { type View, type When } from "@/components/EventBrowser";
 import { isWatchable } from "@/components/MaterialRow";
 import SetupNotice from "@/components/SetupNotice";
 
 export const metadata: Metadata = { title: "Events" };
 export const revalidate = 60;
 
-export default async function EventsPage({ searchParams }: { searchParams: Promise<{ role?: string; when?: string }> }) {
-  const [{ role, when }, events, materials, counts] = await Promise.all([searchParams, listEvents(), listMaterials(), eventCounts()]);
-  const talkCounts: Record<string, number> = {};
-  materials.filter((m) => isWatchable(m)).forEach((m) => { talkCounts[m.event_id] = (talkCounts[m.event_id] ?? 0) + 1; });
+export default async function EventsPage({ searchParams }: { searchParams: Promise<{ when?: string; view?: string }> }) {
+  const [{ when, view }, events, materials, attendance] = await Promise.all([searchParams, listEvents(), listMaterials(), eventCounts()]);
+  const talks: Record<string, number> = {};
+  const items: Record<string, number> = {};
+  for (const m of materials) {
+    items[m.event_id] = (items[m.event_id] ?? 0) + 1;
+    if (isWatchable(m)) talks[m.event_id] = (talks[m.event_id] ?? 0) + 1;
+  }
+  const going = Object.fromEntries(Object.entries(attendance).map(([id, c]) => [id, c.going]));
+  const initialWhen: When = when === "upcoming" || when === "past" ? when : "all";
+  const initialView: View = view === "calendar" ? "calendar" : "list";
   return (
     <div className="wrap page">
       <SetupNotice />
-      <div className="eyebrow">Events</div>
-      <h1 style={{ marginBottom: 20 }}>Where to find <em>Kleros</em></h1>
-      <EventBrowser events={events} talkCounts={talkCounts} counts={counts} initialRole={role} initialWhen={when === "past" ? "past" : undefined} />
+      <header className="page-head">
+        <div className="eyebrow">Events</div>
+        <h1>Where to find <em>Kleros</em></h1>
+        <p className="lede">Conferences, meetups and workshops where Kleros hosts, speaks or has a booth, with the talks and slides from each one.</p>
+      </header>
+      <EventBrowser events={events} counts={{ talks, materials: items, going }} initialWhen={initialWhen} initialView={initialView} />
     </div>
   );
 }

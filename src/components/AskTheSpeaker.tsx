@@ -68,7 +68,7 @@ export default function AskTheSpeaker({ eventId, signedIn, isTeam, displayName, 
   return (
     <div className="stack">
       <form className="row-flex" onSubmit={ask}>
-        <input className="search" value={body} onChange={(e) => setBody(e.target.value)} placeholder="Ask the Kleros speakers a question…" maxLength={280} minLength={3} required aria-label="Your question" />
+        <input className="search" value={body} onChange={(e) => setBody(e.target.value)} placeholder="Ask the Kleros speakers a question" maxLength={280} minLength={3} required aria-label="Your question" />
         {signedIn
           ? <label className="muted small"><input type="checkbox" checked={anon} onChange={(e) => setAnon(e.target.checked)} /> anonymous</label>
           : <input className="search" style={{ flex: "0 1 160px" }} value={guestName} onChange={(e) => setGuestName(e.target.value)} placeholder="Your name (optional)" maxLength={40} aria-label="Your name" />}
@@ -78,7 +78,6 @@ export default function AskTheSpeaker({ eventId, signedIn, isTeam, displayName, 
       <div className="row-flex">
         <div className="seg" role="group" aria-label="Sort"><button aria-pressed={sort === "top"} onClick={() => setSort("top")}>Top</button><button aria-pressed={sort === "new"} onClick={() => setSort("new")}>Newest</button></div>
         <Link className="btn sm ghost" href={`/q/${slug}`}>Ask from your phone</Link>
-        {isTeam && <Link className="btn sm" href={`/events/${slug}/live`} target="_blank">● Event mode ↗</Link>}
       </div>
       {list.map((q) => (
         <div key={q.id} className={`q ${q.featured ? "feat" : ""} ${q.status === "answered" ? "done" : ""}`}>
@@ -96,7 +95,7 @@ export default function AskTheSpeaker({ eventId, signedIn, isTeam, displayName, 
           </div>
         </div>
       ))}
-      {!list.length && <div className="empty" style={{ padding: 18 }}><b>No questions yet</b>Questions work during the talk and after it. The speakers see them all.</div>}
+      {!list.length && <p className="quiet-empty">No questions yet. Questions work during the talk and after it, and the speakers see them all.</p>}
     </div>
   );
 }

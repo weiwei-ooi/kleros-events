@@ -1,68 +1,140 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import type { EventRow, KlerosRole } from "@/lib/types";
+import type { EventRow } from "@/lib/types";
 import EventCard from "./EventCard";
-import { EVENT_TYPES, KLEROS_HOSTED, TOPICS } from "@/lib/kleros";
-import { endOf, isPast, todayIso } from "@/lib/format";
+import { EVENT_TYPES, LUMA_URL, TOPICS } from "@/lib/kleros";
+import { endOf, groupByMonth, isPast, newestFirst, plural, soonestFirst, todayIso } from "@/lib/format";
 
-type When = "upcoming" | "past" | "month";
-type Host = "all" | "hosted" | "participating";
+export type When = "all" | "upcoming" | "past";
+export type View = "list" | "calendar";
+type Counts = { talks: Record<string, number>; materials: Record<string, number>; going: Record<string, number> };
 
-export default function EventBrowser({ events, talkCounts, counts, initialRole, initialWhen }: {
-  events: EventRow[]; talkCounts: Record<string, number>; counts: Record<string, { going: number }>; initialRole?: string; initialWhen?: When;
+const WHEN: [When, string][] = [["all", "All"], ["upcoming", "Upcoming"], ["past", "Past"]];
+
+export default function EventBrowser({ events, counts, initialWhen = "all", initialView = "list" }: {
+  events: EventRow[]; counts: Counts; initialWhen?: When; initialView?: View;
 }) {
-  const [when, setWhen] = useState<When>(initialWhen ?? "upcoming");
-  const [host, setHost] = useState<Host>(initialRole === "host" ? "hosted" : "all");
+  const [when, setWhen] = useState<When>(initialWhen);
+  const [view, setView] = useState<View>(initialView);
   const [type, setType] = useState("");
+  const [topic, setTopic] = useState("");
   const [q, setQ] = useState("");
-  const [tags, setTags] = useState<string[]>([]);
   const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1, 12); });
 
-  const allTags = useMemo(() => [...new Set([...TOPICS, ...events.flatMap((e) => e.topics)])], [events]);
-  const list = events.filter((e) => {
-    if (when === "upcoming" && isPast(e)) return false;
-    if (when === "past" && !isPast(e)) return false;
-    const hosted = KLEROS_HOSTED.includes(e.kleros_role as KlerosRole);
-    if (host === "hosted" && !hosted) return false;
-    if (host === "participating" && hosted) return false;
+  // Keep the address shareable without reloading the page.
+  useEffect(() => {
+    const u = new URL(window.location.href);
+    if (when === "all") u.searchParams.delete("when"); else u.searchParams.set("when", when);
+    if (view === "list") u.searchParams.delete("view"); else u.searchParams.set("view", view);
+    u.searchParams.delete("role");
+    window.history.replaceState(null, "", u.pathname + u.search);
+  }, [when, view]);
+
+  const topics = useMemo(() => [...new Set([...TOPICS, ...events.flatMap((e) => e.topics)])].sort(), [events]);
+  const types = useMemo(() => [...new Set([...EVENT_TYPES, ...events.map((e) => e.event_type)])], [events]);
+
+  const matching = events.filter((e) => {
     if (type && e.event_type !== type) return false;
-    if (tags.length && !e.topics.some((t) => tags.includes(t))) return false;
+    if (topic && !e.topics.includes(topic)) return false;
     if (q) {
-      const h = [e.title, e.city, e.country, e.organizer, e.description, e.topics.join(" ")].join(" ").toLowerCase();
-      if (!h.includes(q.toLowerCase())) return false;
+      const h = [e.title, e.city, e.country, e.venue, e.organizer, e.description, e.event_type, e.topics.join(" ")].join(" ").toLowerCase();
+      if (!h.includes(q.trim().toLowerCase())) return false;
     }
     return true;
   });
-  const sorted = [...list].sort((a, b) => (when === "past" ? b.starts_on.localeCompare(a.starts_on) : a.starts_on.localeCompare(b.starts_on)));
-  const y = month.getFullYear(), mo = month.getMonth();
-  const shown = when === "month" ? sorted.filter((e) => { const d = new Date(e.starts_on + "T12:00:00"); return d.getFullYear() === y && d.getMonth() === mo; }) : sorted;
+  const upcoming = matching.filter((e) => !isPast(e)).sort(soonestFirst);
+  const past = matching.filter(isPast).sort(newestFirst);
+  const filtered = !!(type || topic || q);
+  const clear = () => { setType(""); setTopic(""); setQ(""); };
+
+  const shownCount = view === "calendar" ? matching.length : when === "upcoming" ? upcoming.length : when === "past" ? past.length : matching.length;
 
   return (
-    <>
-      <div className="filters">
-        <div className="seg" role="group" aria-label="Time">
-          {(["upcoming", "past", "month"] as When[]).map((w) => <button key={w} aria-pressed={when === w} onClick={() => setWhen(w)}>{w[0].toUpperCase() + w.slice(1)}</button>)}
+    <div className="browser">
+      <div className="toolbar">
+        {view === "list"
+          ? <div className="seg" role="group" aria-label="Timeline">
+              {WHEN.map(([v, l]) => <button key={v} aria-pressed={when === v} onClick={() => setWhen(v)}>{l}</button>)}
+            </div>
+          : <span className="muted small">Every event, by month</span>}
+        <div className="seg" role="group" aria-label="View">
+          <button aria-pressed={view === "list"} onClick={() => setView("list")}>List</button>
+          <button aria-pressed={view === "calendar"} onClick={() => setView("calendar")}>Calendar</button>
         </div>
-        <div className="seg" role="group" aria-label="Kleros role">
-          <button aria-pressed={host === "all"} onClick={() => setHost("all")}>All</button>
-          <button aria-pressed={host === "hosted"} onClick={() => setHost("hosted")}>Kleros-hosted</button>
-          <button aria-pressed={host === "participating"} onClick={() => setHost("participating")}>Kleros taking part</button>
-        </div>
-        <select className="f" value={type} onChange={(e) => setType(e.target.value)} aria-label="Event type">
-          <option value="">Any type</option>{EVENT_TYPES.map((t) => <option key={t}>{t}</option>)}
+      </div>
+
+      <div className="refine">
+        <input className="search" type="search" placeholder="Search by name, city or topic" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search events" />
+        <select className="f" value={topic} onChange={(e) => setTopic(e.target.value)} aria-label="Topic">
+          <option value="">All topics</option>{topics.map((t) => <option key={t}>{t}</option>)}
         </select>
-        <input className="search" type="search" placeholder="Search events, cities, speakers…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search events" />
+        <select className="f" value={type} onChange={(e) => setType(e.target.value)} aria-label="Event type">
+          <option value="">All formats</option>{types.map((t) => <option key={t}>{t}</option>)}
+        </select>
       </div>
-      <div className="chips">
-        {allTags.map((t) => <button key={t} className="chip" aria-pressed={tags.includes(t)} onClick={() => setTags(tags.includes(t) ? tags.filter((x) => x !== t) : [...tags, t])}>{t}</button>)}
+      <div className="result-line" role="status">
+        <span>{plural(shownCount, "event")}{filtered ? " match" : ""}</span>
+        {filtered && <button className="link-btn" onClick={clear}>Clear filters</button>}
       </div>
-      {when === "month" && <MonthGrid month={month} setMonth={setMonth} events={list} />}
-      <div className="grid">
-        {shown.length ? shown.map((e) => <EventCard key={e.id} e={e} talks={talkCounts[e.id]} going={counts[e.id]?.going} />)
-          : <div className="empty" style={{ gridColumn: "1/-1" }}><b>{events.length ? "No events match" : "No events on record yet"}</b>{events.length ? "Try another time range or clear the topics." : "The Kleros team adds events here."}</div>}
-      </div>
-    </>
+
+      {!events.length ? (
+        <div className="empty"><b>No events on record yet</b>The Kleros team adds events here. Upcoming ones also appear on <a href={LUMA_URL} target="_blank" rel="noopener">Luma</a>.</div>
+      ) : view === "calendar" ? (
+        <>
+          <MonthGrid month={month} setMonth={setMonth} events={matching} />
+          <MonthList month={month} events={matching} counts={counts} />
+        </>
+      ) : (
+        <>
+          {when !== "past" && (
+            <Timeline title={when === "all" ? "Upcoming" : undefined} list={upcoming} counts={counts}
+              empty={filtered ? "No upcoming events match." : <>No upcoming events announced yet. New ones are posted on <a href={LUMA_URL} target="_blank" rel="noopener">Luma</a> first.</>} />
+          )}
+          {when !== "upcoming" && (
+            <Timeline title={when === "all" ? "Past" : undefined} list={past} counts={counts}
+              empty={filtered ? "No past events match." : "No past events on record yet."} />
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function Timeline({ title, list, counts, empty }: { title?: string; list: EventRow[]; counts: Counts; empty: React.ReactNode }) {
+  return (
+    <section className="timeline">
+      {title && <h2 className="tl-h">{title} <span className="count">{list.length}</span></h2>}
+      {list.length ? groupByMonth(list).map((g) => (
+        <div key={g.key} className="month-group">
+          <h3 className="month-h">{g.label}</h3>
+          <div className="grid">
+            {g.items.map((e) => <EventCard key={e.id} e={e} talks={counts.talks[e.id]} materials={counts.materials[e.id]} going={isPast(e) ? 0 : counts.going[e.id]} />)}
+          </div>
+        </div>
+      )) : <p className="quiet-empty">{empty}</p>}
+    </section>
+  );
+}
+
+function inMonth(e: EventRow, month: Date) {
+  const y = month.getFullYear(), m = String(month.getMonth() + 1).padStart(2, "0");
+  const first = `${y}-${m}-01`, last = `${y}-${m}-31`;
+  return e.starts_on <= last && endOf(e) >= first;
+}
+
+function MonthList({ month, events, counts }: { month: Date; events: EventRow[]; counts: Counts }) {
+  const list = events.filter((e) => inMonth(e, month)).sort(soonestFirst);
+  const label = month.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  return (
+    <section className="timeline">
+      <h3 className="month-h">{list.length ? `${plural(list.length, "event")} in ${label}` : `Nothing on record for ${label}`}</h3>
+      {list.length > 0 && (
+        <div className="grid">
+          {list.map((e) => <EventCard key={e.id} e={e} talks={counts.talks[e.id]} materials={counts.materials[e.id]} going={isPast(e) ? 0 : counts.going[e.id]} />)}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -73,9 +145,10 @@ function MonthGrid({ month, setMonth, events }: { month: Date; setMonth: (d: Dat
   const days: Date[] = [];
   for (let i = 0; i < 42; i++) { const d = new Date(start); d.setDate(start.getDate() + i); if (i >= 35 && d.getMonth() !== mo) break; days.push(d); }
   const today = todayIso();
+  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   return (
     <div className="month">
-      <div className="month-h">
+      <div className="month-nav">
         <button className="btn sm ghost" onClick={() => setMonth(new Date(y, mo - 1, 1, 12))} aria-label="Previous month">‹</button>
         <h3>{month.toLocaleDateString("en-GB", { month: "long", year: "numeric" })}</h3>
         <button className="btn sm ghost" onClick={() => setMonth(new Date(y, mo + 1, 1, 12))} aria-label="Next month">›</button>
@@ -83,12 +156,12 @@ function MonthGrid({ month, setMonth, events }: { month: Date; setMonth: (d: Dat
       <div className="cal">
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => <div key={d} className="dow">{d}</div>)}
         {days.map((d) => {
-          const iso = d.toISOString().slice(0, 10);
-          const evs = events.filter((e) => e.starts_on <= iso && endOf(e) >= iso);
+          const k = iso(d);
+          const evs = events.filter((e) => e.starts_on <= k && endOf(e) >= k);
           return (
-            <div key={iso} className={`day ${d.getMonth() !== mo ? "out" : ""} ${iso === today ? "today" : ""}`}>
+            <div key={k} className={`day ${d.getMonth() !== mo ? "out" : ""} ${k === today ? "today" : ""}`}>
               <span className="n">{d.getDate()}</span>
-              {evs.map((e) => <Link key={e.id} href={`/events/${e.slug}`} className={KLEROS_HOSTED.includes(e.kleros_role) ? "" : "p"} title={e.title}>{e.title}</Link>)}
+              {evs.map((e) => <Link key={e.id} href={`/events/${e.slug}`} title={e.title}>{e.title}</Link>)}
             </div>
           );
         })}
