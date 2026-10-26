@@ -1,15 +1,8 @@
-import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import { getEvent } from "@/lib/data";
-import EventMode from "@/components/EventMode";
-import { SITE_URL } from "@/lib/kleros";
-import { currentUser } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "Event mode" };
-
+// The old combined "event mode" page now lives in two places: the host console for the
+// team, and /screen for the projector.
 export default async function LivePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const [data, { profile }] = await Promise.all([getEvent(slug), currentUser()]);
-  if (!data) notFound();
-  return <EventMode eventId={data.event.id} slug={slug} title={data.event.title} joinUrl={`${SITE_URL}/q/${slug}`} isTeam={!!profile?.is_team} />;
+  redirect(`/events/${slug}/host`);
 }
