@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { listEvents, listMaterials, eventCounts } from "@/lib/data";
 import { isPast, newestFirst, soonestFirst } from "@/lib/format";
+import type { EventRow } from "@/lib/types";
 import { LUMA_URL } from "@/lib/kleros";
 import EventCard from "@/components/EventCard";
 import { TalkCard, isWatchable } from "@/components/MaterialRow";
@@ -9,10 +10,26 @@ import SetupNotice from "@/components/SetupNotice";
 
 export const revalidate = 60;
 
+/**
+ * Takes events in order until two rows of the three-column grid are full. A card with a
+ * cover spans two rows (see globals.css), so it uses two slots.
+ */
+function twoRows(list: EventRow[], slots = 6) {
+  const out: EventRow[] = [];
+  let used = 0;
+  for (const e of list) {
+    const cost = e.cover_path ? 2 : 1;
+    if (used + cost > slots) break;
+    out.push(e); used += cost;
+    if (used === slots) break;
+  }
+  return out;
+}
+
 export default async function Home() {
   const [events, materials, counts] = await Promise.all([listEvents(), listMaterials(), eventCounts()]);
   const upcoming = events.filter((e) => !isPast(e)).sort(soonestFirst);
-  const recent = events.filter(isPast).sort(newestFirst).slice(0, 3);
+  const recent = twoRows(events.filter(isPast).sort(newestFirst));
   const byId = Object.fromEntries(events.map((e) => [e.id, e]));
   // Talks from events the visitor can see, newest event first.
   const talks = materials.filter((m) => isWatchable(m) && byId[m.event_id])
@@ -46,7 +63,7 @@ export default async function Home() {
       <section className="block">
         <div className="section-h"><h2>Coming up</h2><Link href="/events?when=upcoming">All upcoming →</Link></div>
         {upcoming.length
-          ? <div className="grid">{upcoming.slice(0, 6).map((e) => <EventCard key={e.id} e={e} talks={talkCount(e.id)} materials={itemCount(e.id)} going={counts[e.id]?.going} />)}</div>
+          ? <div className="grid">{twoRows(upcoming).map((e) => <EventCard key={e.id} e={e} talks={talkCount(e.id)} materials={itemCount(e.id)} going={counts[e.id]?.going} />)}</div>
           : <p className="quiet-empty">No upcoming events announced yet. New ones are posted on <a href={LUMA_URL} target="_blank" rel="noopener">Luma</a> first.</p>}
       </section>
 

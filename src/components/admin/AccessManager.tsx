@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
@@ -24,6 +24,14 @@ export default function AccessManager({ rows, myId }: { rows: AccessRow[]; myId:
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [confirm, setConfirm] = useState("");
+  const confirmTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(confirmTimer.current), []);
+  /** First press arms the button for 4 seconds; a second press within that time acts. */
+  function arm(email: string) {
+    setConfirm(email);
+    clearTimeout(confirmTimer.current);
+    confirmTimer.current = setTimeout(() => setConfirm((c) => (c === email ? "" : c)), 4000);
+  }
 
   const members = rows.filter((r) => r.is_team && r.user_id && !r.blocked);
   const invited = rows.filter((r) => r.granted && !r.user_id);
@@ -62,15 +70,20 @@ export default function AccessManager({ rows, myId }: { rows: AccessRow[]; myId:
     if (r.is_admin) return <span className="muted small">Always has access</span>;
     if (r.blocked) return <button className="btn sm" disabled={busy === r.email} onClick={() => unblock(r)}>Unblock</button>;
     const isRemove = r.granted && !r.kleros_email;
-    const label = isRemove ? "Remove" : "Block";
-    if (confirm !== r.email) return <button className="btn sm ghost" disabled={busy === r.email} onClick={() => setConfirm(r.email)}>{label}</button>;
+    const armed = confirm === r.email;
     return (
-      <span className="row-flex">
-        <button className="btn sm" disabled={busy === r.email} onClick={() => (isRemove ? remove(r) : block(r))}>Confirm {label.toLowerCase()}</button>
-        <button className="btn sm ghost" onClick={() => setConfirm("")}>Cancel</button>
-      </span>
+      <button className={`btn sm ${armed ? "danger-armed" : ""}`} disabled={busy === r.email}
+        onClick={() => (armed ? (isRemove ? remove(r) : block(r)) : arm(r.email))}>
+        {armed ? (isRemove ? "Remove?" : "Block?") : isRemove ? "Remove" : "Block"}
+      </button>
     );
   }
+
+  /** The display name, unless it is missing or just the part of the email before the @. */
+  const nameOf = (r: AccessRow) => {
+    const n = r.display_name?.trim();
+    return n && n.toLowerCase() !== r.email.split("@")[0].toLowerCase() ? n : null;
+  };
 
   function source(r: AccessRow) {
     if (r.is_admin) return <span className="pill host">{r.email === "weiwei@kleros.io" ? "Master admin" : "Admin"}</span>;
@@ -85,8 +98,8 @@ export default function AccessManager({ rows, myId }: { rows: AccessRow[]; myId:
       {items.map((r) => (
         <li key={r.email} className="acc-row">
           <div className="acc-who">
-            <b>{r.display_name || r.email.split("@")[0]}{r.user_id === myId && <span className="muted small"> (you)</span>}</b>
-            <span className="small muted acc-email">{r.email}</span>
+            <b className="acc-email">{nameOf(r) ?? r.email}{r.user_id === myId && <span className="muted small"> (you)</span>}</b>
+            {nameOf(r) && <span className="small muted acc-email">{r.email}</span>}
             {r.note && <span className="small muted">{r.note}</span>}
           </div>
           <div className="acc-src">{source(r)}</div>

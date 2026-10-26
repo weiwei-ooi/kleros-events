@@ -67,7 +67,7 @@ export default function QuestionsPanel({ eventId, questions, loaded, live, error
             </button>
           ))}
         </div>
-        <div className="seg" role="group" aria-label="Sort">
+        <div className="seg sm" role="group" aria-label="Sort">
           <button aria-pressed={sort === "top"} onClick={() => setSort("top")}>Top</button>
           <button aria-pressed={sort === "new"} onClick={() => setSort("new")}>New</button>
         </div>
@@ -87,7 +87,7 @@ export default function QuestionsPanel({ eventId, questions, loaded, live, error
               </div>
             </div>
             <div className="qp-acts">
-              <button className="btn sm" disabled={busy === featured.id} onClick={() => moderate(featured, { featured: false })}>Take off screen</button>
+              <button className="btn sm primary" disabled={busy === featured.id} onClick={() => moderate(featured, { featured: false })}>Take off screen</button>
               <button className="btn sm" disabled={busy === featured.id} onClick={() => moderate(featured, { status: "answered" })}>Mark answered</button>
             </div>
           </article>
@@ -105,7 +105,7 @@ export default function QuestionsPanel({ eventId, questions, loaded, live, error
             <div className="qp-acts">
               {view === "open" && (
                 <>
-                  <button className="btn sm primary" disabled={busy === q.id} onClick={() => moderate(q, { featured: true })}>Show on big screen</button>
+                  <button className="btn sm" disabled={busy === q.id} onClick={() => moderate(q, { featured: true })}>Show on big screen</button>
                   <button className="btn sm" disabled={busy === q.id} onClick={() => moderate(q, { status: "answered" })}>Mark answered</button>
                   <button className="btn sm ghost" disabled={busy === q.id} onClick={() => moderate(q, { status: "hidden" })}>Hide</button>
                 </>

@@ -3,7 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import type { EventRow, Material, MaterialKind } from "@/lib/types";
 import { fmtRange, newestFirst, place, plural } from "@/lib/format";
-import MaterialRow, { TalkCard, isWatchable } from "./MaterialRow";
+import { ArchiveRow, isWatchable } from "./MaterialRow";
 
 type Tab = "all" | "talks" | "slides" | "posts";
 const TABS: { v: Tab; label: string; kinds: MaterialKind[] | null }[] = [
@@ -48,20 +48,18 @@ export default function TalkArchive({ materials, events }: { materials: Material
         {needle && <button className="link-btn" onClick={() => setQ("")}>Clear search</button>}
       </div>
 
-      {groups.map(({ e, items }) => {
-        const watch = items.filter((m) => isWatchable(m));
-        const rest = items.filter((m) => !isWatchable(m));
-        return (
-          <section key={e.id} className="arch-event">
-            <header className="arch-h">
-              <h2><Link href={`/events/${e.slug}`}>{e.title}</Link></h2>
-              <span className="muted small">{fmtRange(e.starts_on)} · {place(e)} · {plural(items.length, "item")}</span>
-            </header>
-            {watch.length > 0 && <div className="grid">{watch.map((m) => <TalkCard key={m.id} m={m} />)}</div>}
-            {rest.length > 0 && <div className="lib">{rest.map((m) => <MaterialRow key={m.id} m={m} />)}</div>}
-          </section>
-        );
-      })}
+      {groups.map(({ e, items }) => (
+        <section key={e.id} className="arch-event">
+          <header className="arch-h">
+            <h2><Link href={`/events/${e.slug}`}>{e.title}</Link></h2>
+            <span className="muted small">{fmtRange(e.starts_on)} · {place(e)} · {plural(items.length, "item")}</span>
+          </header>
+          <div className="lib">
+            {/* watchable talks first, then the rest, each in the order they were added */}
+            {[...items.filter(isWatchable), ...items.filter((m) => !isWatchable(m))].map((m) => <ArchiveRow key={m.id} m={m} eventSlug={e.slug} />)}
+          </div>
+        </section>
+      ))}
       {!groups.length && (
         <div className="empty">
           <b>{materials.length ? "Nothing matches" : "Nothing in the archive yet"}</b>

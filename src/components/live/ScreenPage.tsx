@@ -42,7 +42,7 @@ export default function ScreenPage({ eventId, title, joinUrl }: { eventId: strin
 
   useEffect(() => {
     poke();
-    const h = setTimeout(() => setHint(false), 5000);
+    const h = setTimeout(() => setHint(false), 4000);
     window.addEventListener("mousemove", poke);
     return () => { window.removeEventListener("mousemove", poke); clearTimeout(h); clearTimeout(timer.current); };
   }, [poke]);

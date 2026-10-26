@@ -29,21 +29,6 @@ export function slugify(s: string) {
   return s.toLowerCase().normalize("NFKD").replace(/[^\w\s-]/g, "").trim().replace(/[\s_]+/g, "-").replace(/-+/g, "-").slice(0, 80);
 }
 
-export const monthKey = (iso: string) => iso.slice(0, 7);
-export const monthLabel = (iso: string) => new Date(iso.slice(0, 7) + "-15T12:00:00").toLocaleDateString("en-GB", { month: "long", year: "numeric" });
-
-/** Groups events by the month they start in, keeping the order they come in. */
-export function groupByMonth<T extends Pick<EventRow, "starts_on">>(list: T[]): { key: string; label: string; items: T[] }[] {
-  const out: { key: string; label: string; items: T[] }[] = [];
-  for (const e of list) {
-    const k = monthKey(e.starts_on);
-    const last = out[out.length - 1];
-    if (last && last.key === k) last.items.push(e);
-    else out.push({ key: k, label: monthLabel(e.starts_on), items: [e] });
-  }
-  return out;
-}
-
 export const soonestFirst = <T extends Pick<EventRow, "starts_on">>(a: T, b: T) => a.starts_on.localeCompare(b.starts_on);
 export const newestFirst = <T extends Pick<EventRow, "starts_on">>(a: T, b: T) => b.starts_on.localeCompare(a.starts_on);
 

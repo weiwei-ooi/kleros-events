@@ -109,7 +109,7 @@ function EventList({ events, tab, matCount, going }: {
         const past = isPast(e);
         return (
           <li key={e.id} className="desk-row">
-            <div className="desk-date mono">{fmtRange(e.starts_on, e.ends_on)}</div>
+            <div className="desk-date">{fmtRange(e.starts_on, e.ends_on)}</div>
             <div className="desk-main">
               <Link className="desk-title" href={`/admin/events/${e.id}`}>{e.title}</Link>
               <div className="meta">
@@ -122,7 +122,7 @@ function EventList({ events, tab, matCount, going }: {
               {!past && <span><b className="mono">{going[e.id] ?? 0}</b> going</span>}
               {past && mats === 0 && e.status === "published"
                 ? <span className="pill ex">Needs materials</span>
-                : <span><b className="mono">{mats}</b> {mats === 1 ? "material" : "materials"}</span>}
+                : (past || mats > 0) && <span><b className="mono">{mats}</b> {mats === 1 ? "material" : "materials"}</span>}
             </div>
             <div className="desk-acts">
               <Link className="btn sm" href={`/events/${e.slug}/host`}>Run live</Link>

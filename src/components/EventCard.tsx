@@ -13,16 +13,13 @@ export function statusLabel(e: Pick<EventRow, "status" | "starts_on" | "ends_on"
   return null;
 }
 
-/** Placeholder for events without a cover: a calm date tile on a tinted block. */
-export function CoverFallback({ e }: { e: Pick<EventRow, "starts_on" | "event_type"> }) {
-  const d = new Date(e.starts_on + "T12:00:00");
+/** Date tile for cards without a cover: day number over the short month. */
+export function DateTile({ iso }: { iso: string }) {
+  const d = new Date(iso + "T12:00:00");
   return (
-    <span className="cover-fb">
-      <span className="tile">
-        <b>{d.getDate()}</b>
-        <span>{d.toLocaleDateString("en-GB", { month: "short" })}</span>
-      </span>
-      <span className="kind">{e.event_type}</span>
+    <span className="date-tile" aria-hidden>
+      <b>{d.getDate()}</b>
+      <span>{d.toLocaleDateString("en-GB", { month: "short" })}</span>
     </span>
   );
 }
@@ -32,22 +29,47 @@ export default function EventCard({ e, talks = 0, materials = 0, going = 0, why,
 }) {
   const status = statusLabel(e);
   const count = talks ? plural(talks, "talk") : materials ? plural(materials, "item") : going ? `${going} going` : "";
+  const foot = (
+    <div className="foot">
+      <span className="role">{ROLE_LABEL[e.kleros_role]}</span>
+      {count && <span>{count}</span>}
+    </div>
+  );
+  const extra = <>{why && <span className="why">{why}</span>}{mine && <span className="why">{mine}</span>}</>;
+
+  if (!e.cover_path) {
+    // No cover: a compact card with the date tile beside the text, no placeholder image.
+    return (
+      <Link className="card ev compact" href={`/events/${e.slug}`}>
+        <div className="body">
+          <div className="ev-row">
+            <DateTile iso={e.starts_on} />
+            <div className="ev-text">
+              <div className="date">{fmtRange(e.starts_on, e.ends_on)}</div>
+              <h3>{e.title}</h3>
+              <div className="place">{place(e)} · {e.event_type}</div>
+              {status && <span className={`pill ${status.cls}`}>{status.text}</span>}
+              {extra}
+            </div>
+          </div>
+          {foot}
+        </div>
+      </Link>
+    );
+  }
+
   return (
     <Link className="card ev" href={`/events/${e.slug}`}>
       <div className="cover">
-        <Thumb src={e.cover_path ? fileUrl(e.cover_path) : null} contain fallback={<CoverFallback e={e} />} />
+        <Thumb src={fileUrl(e.cover_path)} contain fallback={<span className="cover-fb"><DateTile iso={e.starts_on} /></span>} />
         {status && <span className={`pill ${status.cls} on-cover`}>{status.text}</span>}
       </div>
       <div className="body">
         <div className="date">{fmtRange(e.starts_on, e.ends_on)}</div>
         <h3>{e.title}</h3>
-        <div className="place">{place(e)}</div>
-        {why && <span className="why">{why}</span>}
-        {mine && <span className="why">{mine}</span>}
-        <div className="foot">
-          <span className="role">{ROLE_LABEL[e.kleros_role]}</span>
-          {count && <span>{count}</span>}
-        </div>
+        <div className="place">{place(e)} · {e.event_type}</div>
+        {extra}
+        {foot}
       </div>
     </Link>
   );

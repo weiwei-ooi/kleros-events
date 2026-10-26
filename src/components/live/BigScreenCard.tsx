@@ -2,10 +2,11 @@
 import { useState } from "react";
 import type { Question } from "@/lib/types";
 import ScreenView, { shortUrl } from "./ScreenView";
-import { SCREEN_MODES, type ScreenMode } from "./useScreenMode";
+import type { ScreenMode } from "./useScreenMode";
 
-export default function BigScreenCard({ slug, title, joinUrl, qr, mode, setMode, live, error, questions, fresh }: {
-  slug: string; title: string; joinUrl: string; qr: string; mode: ScreenMode; setMode: (m: ScreenMode) => void;
+/** Preview of the projector and the join link. The mode switch lives in the console header. */
+export default function BigScreenCard({ title, joinUrl, qr, mode, live, error, questions, fresh }: {
+  title: string; joinUrl: string; qr: string; mode: ScreenMode;
   live: boolean; error: string; questions: Question[]; fresh: Set<string>;
 }) {
   const [copied, setCopied] = useState(false);
@@ -28,16 +29,11 @@ export default function BigScreenCard({ slug, title, joinUrl, qr, mode, setMode,
         </span>
       </div>
 
-      <div className="seg bs-modes" role="group" aria-label="What the big screen shows">
-        {SCREEN_MODES.map((m) => <button key={m.id} aria-pressed={mode === m.id} onClick={() => setMode(m.id)}>{m.label}</button>)}
-      </div>
-
       <div className="bs-preview" aria-label="Preview of the big screen">
         <ScreenView preview title={title} joinUrl={joinUrl} qr={qr} mode={mode} questions={questions} fresh={fresh} />
       </div>
 
-      <a className="btn primary bs-open" href={`/events/${slug}/screen`} target={`kleros-screen-${slug}`} rel="noopener">Open big screen</a>
-      <p className="muted small bs-help">Drag the new window to the projector, then double-click it for full screen.</p>
+      <p className="muted small bs-help">The Open big screen button at the top opens this view in a new window. Drag it to the projector, then double-click it for full screen.</p>
 
       <div className="bs-join">
         <span className="lbl">Join link for phones</span>

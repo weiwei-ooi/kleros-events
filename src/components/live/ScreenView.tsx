@@ -98,7 +98,7 @@ export default function ScreenView({ title, joinUrl, qr, mode, questions, fresh,
               <ol className="scr-list">
                 {list.map((q) => (
                   <li key={q.id} className={fresh.has(q.id) ? "fresh" : ""}>
-                    <span className="scr-votes">{q.votes}</span>
+                    <span className="scr-votes"><b>{q.votes}</b><small>{q.votes === 1 ? "vote" : "votes"}</small></span>
                     <span className="scr-body">
                       <span className="scr-text">{q.body}</span>
                       <span className="scr-by">{authorOf(q)}{fresh.has(q.id) ? " · new" : ""}</span>

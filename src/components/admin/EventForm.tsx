@@ -75,7 +75,7 @@ export default function EventForm({ event }: { event?: EventRow }) {
       <div className="field"><span className="lbl">Topics (drive recommendations and the product promos shown)</span>
         <div className="chips" style={{ margin: 0 }}>{TOPICS.map((t) => <button type="button" key={t} className="chip" aria-pressed={topics.includes(t)} onClick={() => setTopics(topics.includes(t) ? topics.filter((x) => x !== t) : [...topics, t])}>{t}</button>)}</div></div>
       <div className="field"><label htmlFor="description">Description</label><textarea id="description" name="description" defaultValue={v?.description ?? ""} /></div>
-      <div className="field"><label htmlFor="recap">Recap (after the event)</label><textarea id="recap" name="recap" defaultValue={v?.recap ?? ""} placeholder="What happened, who we met, key takeaways" /></div>
+      <div className="field"><label htmlFor="recap">Recap (after the event)</label><textarea id="recap" name="recap" defaultValue={v?.recap ?? ""} placeholder="What happened, who attended, key takeaways" /></div>
       <div className="field"><label htmlFor="slug">URL slug</label><input id="slug" name="slug" defaultValue={v?.slug ?? ""} placeholder="Generated from the name if empty" /></div>
       {err && <div className="note">{err}</div>}
       <div className="row-flex">

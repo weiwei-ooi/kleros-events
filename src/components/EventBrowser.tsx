@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { EventRow } from "@/lib/types";
 import EventCard from "./EventCard";
 import { EVENT_TYPES, LUMA_URL, TOPICS } from "@/lib/kleros";
-import { endOf, groupByMonth, isPast, newestFirst, plural, soonestFirst, todayIso } from "@/lib/format";
+import { endOf, isPast, newestFirst, plural, soonestFirst, todayIso } from "@/lib/format";
 
 export type When = "all" | "upcoming" | "past";
 export type View = "list" | "calendar";
@@ -55,11 +55,10 @@ export default function EventBrowser({ events, counts, initialWhen = "all", init
   return (
     <div className="browser">
       <div className="toolbar">
-        {view === "list"
-          ? <div className="seg" role="group" aria-label="Timeline">
-              {WHEN.map(([v, l]) => <button key={v} aria-pressed={when === v} onClick={() => setWhen(v)}>{l}</button>)}
-            </div>
-          : <span className="muted small">Every event, by month</span>}
+        {/* stays in calendar view (disabled) so the toolbar does not shift */}
+        <div className="seg" role="group" aria-label="Timeline" title={view === "calendar" ? "The calendar shows every event" : undefined}>
+          {WHEN.map(([v, l]) => <button key={v} aria-pressed={view === "list" && when === v} disabled={view === "calendar"} onClick={() => setWhen(v)}>{l}</button>)}
+        </div>
         <div className="seg" role="group" aria-label="View">
           <button aria-pressed={view === "list"} onClick={() => setView("list")}>List</button>
           <button aria-pressed={view === "calendar"} onClick={() => setView("calendar")}>Calendar</button>
@@ -107,14 +106,11 @@ function Timeline({ title, list, counts, empty }: { title?: string; list: EventR
   return (
     <section className="timeline">
       {title && <h2 className="tl-h">{title} <span className="count">{list.length}</span></h2>}
-      {list.length ? groupByMonth(list).map((g) => (
-        <div key={g.key} className="month-group">
-          <h3 className="month-h">{g.label}</h3>
-          <div className="grid">
-            {g.items.map((e) => <EventCard key={e.id} e={e} talks={counts.talks[e.id]} materials={counts.materials[e.id]} going={isPast(e) ? 0 : counts.going[e.id]} />)}
-          </div>
+      {list.length ? (
+        <div className="grid">
+          {list.map((e) => <EventCard key={e.id} e={e} talks={counts.talks[e.id]} materials={counts.materials[e.id]} going={isPast(e) ? 0 : counts.going[e.id]} />)}
         </div>
-      )) : <p className="quiet-empty">{empty}</p>}
+      ) : <p className="quiet-empty">{empty}</p>}
     </section>
   );
 }

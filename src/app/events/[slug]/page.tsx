@@ -44,9 +44,9 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
     hasAbout && ["about", "About"],
     talks.length > 0 && ["talks", `Talks (${talks.length})`],
     otherCount > 0 && ["materials", `Slides & links (${otherCount})`],
-    ["ask", "Ask the speaker"],
-    team.length > 0 && ["team", "Kleros team"],
     agenda.length > 0 && ["agenda", "Agenda"],
+    team.length > 0 && ["team", "Kleros team"],
+    ["ask", "Ask the speaker"],
     ["meet", "Meet Kleros"],
   ].filter(Boolean) as [string, string][];
 
@@ -116,10 +116,22 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             </section>
           )}
 
-          <section id="ask" className="sec">
-            <h2>Ask the speaker</h2>
-            <AskTheSpeaker eventId={e.id} signedIn={!!user} isTeam={isTeam} displayName={profile?.display_name ?? ""} slug={e.slug} />
-          </section>
+          {agenda.length > 0 && (
+            <section id="agenda" className="sec">
+              <h2>Agenda</h2>
+              <div className="agenda">
+                {agenda.map((a) => (
+                  <div key={a.id} className="ag">
+                    <span className="tm">{a.starts_at?.slice(0, 5)}</span>
+                    <div>
+                      <div className={a.is_kleros ? "k" : ""} style={{ fontWeight: 600 }}>{a.title}{a.is_kleros && " · Kleros"}</div>
+                      {a.speaker && <div className="muted small">{a.speaker}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {team.length > 0 && (
             <section id="team" className="sec">
@@ -141,22 +153,10 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             </section>
           )}
 
-          {agenda.length > 0 && (
-            <section id="agenda" className="sec">
-              <h2>Agenda</h2>
-              <div className="agenda">
-                {agenda.map((a) => (
-                  <div key={a.id} className="ag">
-                    <span className="tm">{a.starts_at?.slice(0, 5)}</span>
-                    <div>
-                      <div className={a.is_kleros ? "k" : ""} style={{ fontWeight: 600 }}>{a.title}{a.is_kleros && " · Kleros"}</div>
-                      {a.speaker && <div className="muted small">{a.speaker}</div>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
+          <section id="ask" className="sec">
+            <h2>Ask the speaker</h2>
+            <AskTheSpeaker eventId={e.id} signedIn={!!user} isTeam={isTeam} displayName={profile?.display_name ?? ""} slug={e.slug} />
+          </section>
 
           <section id="meet" className="sec">
             <h2>Meet Kleros</h2>
@@ -185,16 +185,12 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           <div className="panel">
             <AttendanceButtons eventId={e.id} past={past} signedIn={!!user} slug={e.slug} />
             <dl className="kv">
-              <dt>Date</dt><dd>{fmtRange(e.starts_on, e.ends_on)}</dd>
-              {time && <><dt>Time</dt><dd>{time}</dd></>}
-              <dt>Place</dt><dd>{where}</dd>
               {e.organizer && <><dt>Organiser</dt><dd>{e.organizer}</dd></>}
-              <dt>Kleros</dt><dd>{ROLE_LABEL[e.kleros_role]}</dd>
               <dt>Format</dt><dd>{e.event_type}</dd>
               {e.topics.length > 0 && <><dt>Topics</dt><dd>{e.topics.join(", ")}</dd></>}
               {!past && c.going > 0 && <><dt>Going</dt><dd>{plural(c.going, "person", "people")}</dd></>}
               {past && c.attended > 0 && <><dt>Attended</dt><dd>{plural(c.attended, "person", "people")}</dd></>}
-              {e.url && <><dt>{past ? "Event page" : "Tickets"}</dt><dd><a href={e.url} target="_blank" rel="noopener">{past ? "Open ↗" : `${ticketLabel} ↗`}</a></dd></>}
+              {past && e.url && <><dt>Event page</dt><dd><a href={e.url} target="_blank" rel="noopener">Open ↗</a></dd></>}
             </dl>
           </div>
         </aside>

@@ -64,6 +64,41 @@ export function TalkCard({ m, event, note }: { m: Material; event?: EventRef; no
   );
 }
 
+/**
+ * One archive row, the same shape for every kind: icon or thumbnail, title, speaker and
+ * details, and one right-aligned action (Watch, Slides or Open).
+ */
+export function ArchiveRow({ m, eventSlug }: { m: Material; eventSlug: string }) {
+  const file = m.url || fileUrl(m.file_path);
+  const detail = isWatchable(m)
+    ? [m.kind === "talk" ? (m.pages ? plural(m.pages, "slide") + " with audio" : "Slides with audio") : "Video", m.duration_seconds ? fmtDur(m.duration_seconds) : ""]
+    : [m.kind === "link" || m.kind === "social" ? hostOf(m.url) : "", m.kind === "audio" && m.duration_seconds ? fmtDur(m.duration_seconds) : "", fmtSize(m.size_bytes)];
+  const sub = [m.speaker, ...detail].filter(Boolean).join(" · ");
+  const thumb = videoThumb(m);
+  let action: React.ReactNode;
+  if (isWatchable(m)) action = <Link className="btn sm primary" href={`/talks/${m.id}`}>▶ Watch</Link>;
+  else if (m.kind === "slides" && m.file_path) action = <Link className="btn sm" href={`/talks/${m.id}`}>Slides</Link>;
+  else if (m.kind === "slides" && m.url) action = <a className="btn sm" href={m.url} target="_blank" rel="noopener">Slides ↗</a>;
+  else if (file) action = <a className="btn sm" href={file} target="_blank" rel="noopener">Open ↗</a>;
+  else action = <Link className="btn sm" href={`/events/${eventSlug}`}>Open</Link>;
+  return (
+    <div className="mrow arow">
+      {m.kind === "image" && m.file_path
+        // eslint-disable-next-line @next/next/no-img-element
+        ? <span className="ico pic"><img src={fileUrl(m.file_path)} alt="" loading="lazy" /></span>
+        : thumb
+          // eslint-disable-next-line @next/next/no-img-element
+          ? <span className="ico pic"><img src={thumb} alt="" loading="lazy" referrerPolicy="no-referrer" /></span>
+          : <span className={`ico ${m.kind}`} aria-hidden>{isWatchable(m) ? "▶" : KIND[m.kind] ?? "FILE"}</span>}
+      <div style={{ minWidth: 0 }}>
+        <div className="t">{m.title}</div>
+        {sub && <div className="s">{sub}</div>}
+      </div>
+      <div className="acts">{action}</div>
+    </div>
+  );
+}
+
 /** A compact row for slides, audio, photos, documents, links and posts. */
 export default function MaterialRow({ m, eventTitle, eventSlug }: { m: Material; eventTitle?: string; eventSlug?: string }) {
   const href = m.url || fileUrl(m.file_path);

@@ -99,6 +99,15 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
   const audioCtx = useRef<AudioContext | null>(null);
   const uploaded = useRef<{ pdf?: string; audio?: string }>({});
   const liveIds = useRef<Map<string, number>>(new Map());
+  const confirmTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  /** Two-press confirm: the first press arms the button for 4 seconds, the second acts. */
+  const arm = useCallback((key: string) => {
+    setConfirm(key);
+    clearTimeout(confirmTimer.current);
+    confirmTimer.current = setTimeout(() => setConfirm((c) => (c === key ? "" : c)), 4000);
+  }, []);
+  useEffect(() => () => clearTimeout(confirmTimer.current), []);
 
   const setPhase = useCallback((p: RecPhase) => { setPhaseState(p); }, []);
   useEffect(() => { onPhase(phase, title || target?.title); }, [phase, title, target, onPhase]);
@@ -374,6 +383,13 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
     await lockScreen();
   }
 
+  /** The Stop button: asks once ("Stop and review?") so a stray click does not end a talk. */
+  function requestStop() {
+    if (confirm !== "stop") { arm("stop"); return; }
+    setConfirm("");
+    stop();
+  }
+
   function stop() {
     if (media.current?.state === "recording") {
       // freeze the clock at the moment Stop is pressed; the last chunk arrives a little later
@@ -411,7 +427,7 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
   }
 
   async function deleteLeftover(s: RecSession) {
-    if (confirm !== s.id) { setConfirm(s.id); return; }
+    if (confirm !== s.id) { arm(s.id); return; }
     setConfirm("");
     await dropSession(s.id).catch(() => {});
     refreshLeftovers();
@@ -469,7 +485,7 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
   }
 
   async function discard() {
-    if (confirm !== "discard") { setConfirm("discard"); return; }
+    if (confirm !== "discard") { arm("discard"); return; }
     // a save that failed half way may have uploaded the slides or the audio already
     const paths = [uploaded.current.pdf, uploaded.current.audio].filter((x): x is string => !!x);
     if (paths.length) {
@@ -512,8 +528,11 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
         <div className="rec-empty">
           <div className="rec-empty-icon" aria-hidden="true"><span className="dot" /></div>
           <b>Nothing is being recorded</b>
-          <p className="muted">Pick a session from the agenda and press <em>Record this session</em>. The laptop records the room audio, and if the speaker&apos;s slides are loaded, each slide change is time-stamped so the talk plays back in sync.</p>
+          <p className="muted">Pick a session from the agenda to record it with its title, or start now and name it afterwards. The laptop records the room audio; with the speaker&apos;s slides loaded, each slide change is time-stamped so the talk plays back in sync.</p>
         </div>
+        <button className="btn primary rec-start rec-start-full" onClick={start} disabled={!supported}>
+          <span className="dot" /> Start recording
+        </button>
         {!supported && <div className="note">This browser cannot record audio. Use a recent version of Chrome, Edge, Firefox or Safari.</div>}
         {leftoverList}
         {err && <div className="note" role="alert">{err}</div>}
@@ -589,11 +608,11 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
               <span className="mono rec-time" aria-live="off">{fmtDur(secs)}</span>
               <span className="rec-meter" aria-label="Microphone level"><span ref={meterBar} /></span>
             </div>
-            <span className="muted small mono" title="Each file must stay under 50 MB to upload">
+            <span className="muted small mono rec-bytes" title="Each file must stay under 50 MB to upload">
               {fmtSize(bytes) || "0 KB"}{pdfFile ? ` + ${fmtSize(pdfFile.size)} slides` : ""}
             </span>
-            <button className="btn rec-stop" onClick={stop} disabled={phase === "stopping"}>
-              <span className="sq" aria-hidden="true" /> {phase === "stopping" ? "Finishing…" : "Stop"}
+            <button className={`btn rec-stop ${confirm === "stop" ? "armed" : ""}`} onClick={requestStop} disabled={phase === "stopping"}>
+              <span className="sq" aria-hidden="true" /> {phase === "stopping" ? "Finishing…" : confirm === "stop" ? "Stop and review?" : "Stop"}
             </button>
           </div>
 
