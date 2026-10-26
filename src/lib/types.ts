@@ -56,7 +56,10 @@ export interface SlideMark {
 
 export interface Material {
   id: string;
-  event_id: string;
+  /** The primary event, kept for older code; null for a recording not linked to any event yet. */
+  event_id: string | null;
+  /** Every event the material is linked to (material_events), primary first. Set by the data helpers. */
+  event_ids?: string[];
   kind: MaterialKind;
   title: string;
   speaker: string | null;

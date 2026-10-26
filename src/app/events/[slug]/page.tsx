@@ -5,11 +5,13 @@ import { getEvent, eventCounts } from "@/lib/data";
 import { fmtRange, isPast, place } from "@/lib/format";
 import { ROLE_LABEL, productsFor } from "@/lib/kleros";
 import { EventCover, RolePill, statusLabel } from "@/components/EventCard";
-import MaterialRow, { MATERIAL_GROUPS, TalkCard, isWatchable } from "@/components/MaterialRow";
+import MaterialRow, { MATERIAL_GROUPS, TalkCard, isTalkLike } from "@/components/MaterialRow";
 import AttendanceButtons from "@/components/AttendanceButtons";
 import AskTheSpeaker from "@/components/AskTheSpeaker";
 import MeetingForm from "@/components/MeetingForm";
 import { currentUser } from "@/lib/supabase/server";
+import EventStudio from "@/components/studio/EventStudio";
+import StudioButton from "@/components/studio/StudioButton";
 
 export const revalidate = 30;
 
@@ -29,8 +31,11 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   const past = isPast(e);
   const isTeam = !!profile?.is_team;
   const status = statusLabel(e);
-  const talks = materials.filter((m) => isWatchable(m));
-  const groups = MATERIAL_GROUPS.map((g) => ({ ...g, items: materials.filter((m) => g.kinds.includes(m.kind)) })).filter((g) => g.items.length);
+  // talks with slides, videos, and recordings (audio files) are all listed under Talks
+  const talks = materials.filter(isTalkLike);
+  const groups = MATERIAL_GROUPS.map((g) => ({ ...g, items: materials.filter((m) => g.kinds.includes(m.kind) && !isTalkLike(m)) })).filter((g) => g.items.length);
+  // recordings saved without slides, for "Attach slides to a recording"
+  const bareRecordings = materials.filter((m) => m.kind === "audio" && !!m.file_path);
   const otherCount = groups.reduce((s, g) => s + g.items.length, 0);
   const c = counts[e.id] ?? { going: 0, attended: 0 };
   const products = productsFor(e.topics);
@@ -50,7 +55,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
 
   const sections = [
     hasAbout && ["about", "About"],
-    talks.length > 0 && ["talks", `Talks (${talks.length})`],
+    (talks.length > 0 || isTeam) && ["talks", talks.length ? `Talks (${talks.length})` : "Talks"],
     otherCount > 0 && ["materials", `Slides & links (${otherCount})`],
     agenda.length > 0 && ["agenda", "Agenda"],
     team.length > 0 && ["team", "Kleros team"],
@@ -78,6 +83,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             <div className="row-flex">
               {e.url && !past && <a className="btn cta" href={e.url} target="_blank" rel="noopener">{ticketLabel} ↗</a>}
               {isTeam && <Link className="btn" href={`/events/${e.slug}/host`}>Run this event</Link>}
+              {isTeam && <StudioButton mode="record" className="btn"><span className="dot" aria-hidden /> Record a session</StudioButton>}
               {isTeam && <Link className="btn ghost" href={`/admin/events/${e.id}`}>Edit</Link>}
             </div>
           ) : null}
@@ -106,10 +112,21 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             </section>
           )}
 
-          {talks.length > 0 && (
+          {(talks.length > 0 || isTeam) && (
             <section id="talks" className="sec">
               <h2>Talks</h2>
-              <div className="grid two-up">{talks.map((m) => <TalkCard key={m.id} m={m} event={e} />)}</div>
+              {isTeam && (
+                <div className="sec-tools" aria-label="Team tools">
+                  <StudioButton mode="record" className="btn sm primary"><span className="dot" aria-hidden /> Record a session</StudioButton>
+                  <StudioButton mode="files" className="btn sm">Add files or links</StudioButton>
+                  {bareRecordings.length > 0 && <StudioButton mode="slides" className="btn sm">Attach slides to a recording</StudioButton>}
+                  <Link className="btn sm ghost" href="/admin/recordings">Recordings library</Link>
+                </div>
+              )}
+              {isTeam && <EventStudio event={{ id: e.id, slug: e.slug, title: e.title }} agenda={agenda} recordings={bareRecordings} />}
+              {talks.length > 0
+                ? <div className="grid two-up">{talks.map((m) => <TalkCard key={m.id} m={m} event={e} />)}</div>
+                : <p className="quiet-empty">No talks yet. Record a session here, or add a recording or video link.</p>}
             </section>
           )}
 

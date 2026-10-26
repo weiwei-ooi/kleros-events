@@ -50,7 +50,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ materia
     ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
     : session;
 
-  const { data: m } = await session.from("materials").select("*, events(title, starts_on)").eq("id", materialId).maybeSingle();
+  const { data: m } = await session.from("materials").select("*, events!materials_event_id_fkey(title, starts_on)").eq("id", materialId).maybeSingle();
   if (!m) return json({ status: "error", error: "Material not found." }, 404);
   if (!["talk", "audio", "video"].includes(m.kind)) return json({ status: "error", error: "Only talks, recordings and videos get transcripts." }, 422);
 

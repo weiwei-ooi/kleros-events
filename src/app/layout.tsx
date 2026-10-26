@@ -4,6 +4,7 @@ import "./globals.css";
 import "./styles/console.css";
 import "./styles/admin.css";
 import "./styles/transcript.css";
+import "./styles/studio.css";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
 import { SITE_URL } from "@/lib/kleros";

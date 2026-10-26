@@ -6,6 +6,7 @@ import { fmtDur, fmtRange } from "@/lib/format";
 import TalkPlayer from "@/components/TalkPlayer";
 import { driveId, fileUrl, youtubeId } from "@/components/MaterialRow";
 import PromoStrip from "@/components/PromoStrip";
+import EventChip from "@/components/studio/EventChip";
 import { currentUser } from "@/lib/supabase/server";
 import { getTranscript, transcriptSetup } from "@/lib/transcript/data";
 import TranscriptArea from "@/components/transcript/TranscriptArea";
@@ -15,7 +16,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const [m, t] = await Promise.all([getMaterial(id), getTranscript(id)]);
   if (!m) return { title: "Talk not found" };
-  const fallback = `${m.speaker ? m.speaker + " at " : ""}${m.events.title}. ${m.kind === "audio" ? "Recording" : "Slides and recording"}.`;
+  const fallback = `${m.speaker ? m.speaker + (m.events ? " at " : "") : ""}${m.events?.title ?? ""}. ${m.kind === "audio" ? "Recording" : "Slides and recording"}.`.replace(/^\. /, "");
   return { title: m.title, description: t?.summary?.tldr?.slice(0, 300) || fallback };
 }
 
@@ -50,9 +51,20 @@ export default async function TalkPage({ params }: { params: Promise<{ id: strin
   return (
     <div className="wrap page stack">
       <div>
-        <Link href={`/events/${m.events.slug}`} className="back">← {m.events.title} · {fmtRange(m.events.starts_on)}</Link>
+        {m.events
+          ? <Link href={`/events/${m.events.slug}`} className="back">← {m.events.title} · {fmtRange(m.events.starts_on)}</Link>
+          : <Link href="/admin/recordings" className="back">← Recordings library</Link>}
         <h1 className="talk-title">{m.title}</h1>
         <div className="muted small">{detail}</div>
+        {m.linkedEvents.length > 1 && (
+          <div className="talk-events">
+            <span className="muted small">Presented at</span>
+            {m.linkedEvents.map((e) => <EventChip key={e.id} e={e} />)}
+          </div>
+        )}
+        {!m.events && isTeam && (
+          <div className="note talk-unlinked">Not linked to any event yet, so only the Kleros team can see it. <Link href="/admin/recordings">Link it to events</Link></div>
+        )}
       </div>
       {recorded && (transcript || isTeam) ? (
         <TranscriptArea materialId={m.id} title={m.title} speaker={m.speaker} initial={transcript} isTeam={isTeam}
