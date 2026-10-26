@@ -1,0 +1,4 @@
+{
+  "about": "Updates for kleros-events.vercel.app found on Kleros socials and team channels. Format: docs/social-feed.md. Applied hourly by sync_feed() in Supabase.",
+  "items": []
+}
