@@ -93,4 +93,5 @@ export interface Profile {
   interests: string[];
   include_online: boolean;
   is_team: boolean;
+  is_admin?: boolean;
 }
