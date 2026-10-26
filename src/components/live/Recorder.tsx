@@ -7,13 +7,17 @@ import { fmtDur, fmtSize, slugify } from "@/lib/format";
 import type { SlideMark } from "@/lib/types";
 import { uploadToStorage } from "../admin/MaterialsManager";
 import TalkStage from "../TalkStage";
+import { runTranscript } from "@/lib/transcript/client";
+import type { TranscriptState } from "@/lib/transcript/types";
 import SlideCanvas from "./SlideCanvas";
 
 export interface RecTarget { key: string; agendaId: string | null; title: string; speaker: string; time?: string }
 export type RecPhase = "idle" | "setup" | "starting" | "recording" | "stopping" | "review" | "saving" | "saved";
 
-// ~21 MB an hour: a two-hour session stays under the 50 MB upload cap of the Supabase free tier.
-const BITRATE = 48_000;
+// 32 kbps Opus is plenty for speech: ~14 MB an hour, so up to about 1 h 45 min fits the
+// 25 MB file limit of speech-to-text services in one piece (longer WebM recordings are split
+// on the server), and the 48 MB stop below is reached only after about 3 h 20 min.
+const BITRATE = 32_000;
 // Each uploaded file must stay under 50 MB. The audio stops itself a little before that,
 // and slides above 45 MB are refused when chosen.
 const WARN_BYTES = 45e6;
@@ -80,6 +84,8 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
   const [warn, setWarn] = useState("");
   const [progress, setProgress] = useState("");
   const [saved, setSaved] = useState<{ id: string; kind: "talk" | "audio" } | null>(null);
+  const [tx, setTx] = useState<TranscriptState | null>(null);
+  const txFor = useRef("");
   const [leftovers, setLeftovers] = useState<RecSession[]>([]);
   const [confirm, setConfirm] = useState("");
   const [backup, setBackup] = useState(true);
@@ -457,8 +463,10 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
       const { data, error } = await sb.from("materials").insert(row).select("id").single();
       if (error) throw error;
       await dropSession(session.current.id).catch(() => {});
-      setSaved({ id: (data as { id: string }).id, kind: withSlides ? "talk" : "audio" });
+      const id = (data as { id: string }).id;
+      setSaved({ id, kind: withSlides ? "talk" : "audio" });
       setPhase("saved");
+      transcribe(id);
     } catch (e) {
       const raw = (e as Error).message || "unknown error";
       const msg = /failed to fetch|network|load failed/i.test(raw) ? "the server could not be reached (check the wifi)" : raw;
@@ -467,6 +475,18 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
       setPhase("review");
     }
     setProgress("");
+  }
+
+  /**
+   * Starts the transcript and summary for a saved recording. Runs on its own: the recording
+   * is already saved, and a failure here only shows a note (it can be retried on the talk page).
+   */
+  function transcribe(id: string) {
+    txFor.current = id;
+    setTx({ status: "queued" });
+    runTranscript(id, (s) => { if (txFor.current === id && mounted.current) setTx(s); })
+      .then((s) => { if (txFor.current === id && mounted.current) setTx(s); })
+      .catch(() => { if (txFor.current === id && mounted.current) setTx({ status: "error", error: "The transcript could not be started." }); });
   }
 
   function download() {
@@ -481,6 +501,7 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
   function reset() {
     session.current = null; chunks.current = []; marksRef.current = []; uploaded.current = {};
     setBlob(null); setMarks([]); setSecs(0); setBytes(0); setErr(""); setWarn(""); setConfirm(""); setSaved(null);
+    txFor.current = ""; setTx(null); // a run in progress carries on in the server; its result shows on the talk page
     removePdf();
   }
 
@@ -676,8 +697,9 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
       {phase === "saved" && saved && (
         <div className="rec-saved">
           <div className="ok">Saved to the event. {saved.kind === "talk" ? "It plays with the slides in sync on the talk page." : "It is listed with the event's recordings."}</div>
+          {tx && <TxLine s={tx} href={`/talks/${saved.id}`} />}
           <div className="row-flex">
-            <a className="btn" href={saved.kind === "talk" ? `/talks/${saved.id}` : `/events/${slug}#talks`} target="_blank" rel="noopener">{saved.kind === "talk" ? "Open the talk ↗" : "View on the event page ↗"}</a>
+            <a className="btn" href={`/talks/${saved.id}`} target="_blank" rel="noopener">Open the talk ↗</a>
             <button className="btn primary" onClick={finish}>Record another session</button>
           </div>
         </div>
@@ -688,4 +710,20 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
       {leftoverList}
     </section>
   );
+}
+
+/** One line under "Saved": where the automatic transcript and summary have got to. */
+function TxLine({ s, href }: { s: TranscriptState; href: string }) {
+  if (s.status === "done") {
+    return <div className="rec-tx s-done" role="status">{s.error ? "Transcript ready, summary not set up" : "Transcript ready"} · <a href={href} target="_blank" rel="noopener">Open the talk</a></div>;
+  }
+  if (s.status === "error") {
+    return (
+      <div className="rec-tx s-error" role="status">
+        {s.setup ? "Transcripts are not set up yet, so none was made. The recording is saved." : `The transcript could not be made: ${s.error || "unknown error"} The recording is saved; try again from the talk page.`}
+      </div>
+    );
+  }
+  const label = s.status === "summarising" ? "Writing summary…" : s.status === "transcribing" ? "Transcribing…" : "Starting the transcript…";
+  return <div className="rec-tx" role="status"><span className="tx-spin" aria-hidden />{label}<span className="muted small">This can take a few minutes. It is fine to record the next session meanwhile.</span></div>;
 }

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { SlideMark } from "@/lib/types";
 import type { PdfDoc } from "@/lib/pdf";
 import { fmtDur } from "@/lib/format";
+import { emitTime, onSeek } from "@/lib/transcript/client";
 
 /**
  * Slides + audio, kept in step by slide-change marks.
@@ -63,6 +64,11 @@ export default function TalkStage({ pdf, mode, audioUrl, marks, notes, onNotes, 
   useEffect(() => { const r = () => draw(page); window.addEventListener("resize", r); return () => window.removeEventListener("resize", r); }, [page, draw]);
   useEffect(() => () => { rec.current?.stream.getTracks().forEach((t) => t.stop()); }, []);
   useEffect(() => { if (audio.current && startAt) audio.current.currentTime = startAt; }, [startAt, audioUrl]);
+  // transcript lines and chapters on the talk page ask the player to jump (play and review only)
+  useEffect(() => {
+    if (mode !== "play" && mode !== "review") return;
+    return onSeek((t) => { const a = audio.current; if (!a) return; a.currentTime = t; a.play().catch(() => {}); });
+  }, [mode]);
 
   const go = (p: number) => {
     p = Math.max(1, Math.min(pages, p));
@@ -118,7 +124,7 @@ export default function TalkStage({ pdf, mode, audioUrl, marks, notes, onNotes, 
   const ms = sorted();
   const total = dur || knownDuration || 0;
   return (
-    <div className="player">
+    <div className="player" data-player>
       <div className="stack" style={{ gap: 10, minWidth: 0 }}>
         <div className="slide" ref={box}>{!pdf && <div className="ph">Loading slides…</div>}<canvas ref={canvas} hidden={!pdf} /></div>
         <div className="row-flex">
@@ -156,8 +162,8 @@ export default function TalkStage({ pdf, mode, audioUrl, marks, notes, onNotes, 
                 a.addEventListener("durationchange", fix);
                 a.currentTime = 1e101;
               }}
-              onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)}
-              onTimeUpdate={(e) => { if (fixing.current) return; const t = e.currentTarget.currentTime; setTime(t); onProgress?.(t, false); if (mode === "play" || mode === "review") { const p = pageAt(t); if (p !== page) setPage(p); } }}
+              onPlay={(e) => { setPlaying(true); emitTime(e.currentTarget.currentTime, true); }} onPause={(e) => { setPlaying(false); emitTime(e.currentTarget.currentTime, false); }}
+              onTimeUpdate={(e) => { if (fixing.current) return; const t = e.currentTarget.currentTime; setTime(t); emitTime(t, !e.currentTarget.paused); onProgress?.(t, false); if (mode === "play" || mode === "review") { const p = pageAt(t); if (p !== page) setPage(p); } }}
               onEnded={(e) => { onProgress?.(e.currentTarget.duration, true); if (mode === "sync") onCaptured?.({ marks: sorted(), duration: e.currentTarget.duration }); }} />
           </div>
         )}
