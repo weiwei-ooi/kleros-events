@@ -13,12 +13,14 @@ import { fmtDur } from "@/lib/format";
  */
 export type StageMode = "play" | "record" | "sync" | "review";
 
-export default function TalkStage({ pdf, mode, audioUrl, marks, notes, onNotes, onCaptured, onProgress, startAt = 0 }: {
+export default function TalkStage({ pdf, mode, audioUrl, marks, notes, onNotes, onCaptured, onProgress, startAt = 0, knownDuration = 0 }: {
   pdf: PdfDoc | null; mode: StageMode; audioUrl?: string; marks: SlideMark[]; notes: Record<string, string>;
   onNotes?: (n: Record<string, string>) => void;
   onCaptured?: (r: { marks: SlideMark[]; duration: number; audio?: Blob }) => void;
   onProgress?: (t: number, ended: boolean) => void;
   startAt?: number;
+  /** Length in seconds when the file itself does not say (MediaRecorder WebM has no duration header). */
+  knownDuration?: number;
 }) {
   const pages = pdf?.numPages ?? 1;
   const [page, setPage] = useState(1);
@@ -35,6 +37,7 @@ export default function TalkStage({ pdf, mode, audioUrl, marks, notes, onNotes, 
   const box = useRef<HTMLDivElement>(null);
   const rec = useRef<{ mr: MediaRecorder; stream: MediaStream; t0: number; chunks: Blob[] } | null>(null);
   const renderSeq = useRef(0);
+  const fixing = useRef(false);
 
   const sorted = () => [...live.current].sort((a, b) => a.t - b.t);
   const startOf = (p: number) => sorted().find((m) => m.p === p)?.t ?? 0;
@@ -113,7 +116,7 @@ export default function TalkStage({ pdf, mode, audioUrl, marks, notes, onNotes, 
   }, [recState]);
 
   const ms = sorted();
-  const total = dur || 0;
+  const total = dur || knownDuration || 0;
   return (
     <div className="player">
       <div className="stack" style={{ gap: 10, minWidth: 0 }}>
@@ -140,9 +143,21 @@ export default function TalkStage({ pdf, mode, audioUrl, marks, notes, onNotes, 
             </div>
             <button className="btn sm ghost" onClick={() => { const r = [1, 1.25, 1.5, 2, 0.75]; const n = r[(r.indexOf(rate) + 1) % r.length]; audio.current!.playbackRate = n; setRate(n); }}>{rate}×</button>
             <audio ref={audio} src={audioUrl} preload="metadata" hidden
-              onLoadedMetadata={(e) => isFinite(e.currentTarget.duration) && setDur(e.currentTarget.duration)}
+              onLoadedMetadata={(e) => {
+                const a = e.currentTarget;
+                if (isFinite(a.duration)) { setDur(a.duration); return; }
+                // WebM from MediaRecorder reports Infinity until the browser has seen the end once
+                fixing.current = true;
+                const fix = () => {
+                  if (!isFinite(a.duration)) return;
+                  a.removeEventListener("durationchange", fix);
+                  setDur(a.duration); a.currentTime = startAt || 0; fixing.current = false;
+                };
+                a.addEventListener("durationchange", fix);
+                a.currentTime = 1e101;
+              }}
               onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)}
-              onTimeUpdate={(e) => { const t = e.currentTarget.currentTime; setTime(t); onProgress?.(t, false); if (mode === "play" || mode === "review") { const p = pageAt(t); if (p !== page) setPage(p); } }}
+              onTimeUpdate={(e) => { if (fixing.current) return; const t = e.currentTarget.currentTime; setTime(t); onProgress?.(t, false); if (mode === "play" || mode === "review") { const p = pageAt(t); if (p !== page) setPage(p); } }}
               onEnded={(e) => { onProgress?.(e.currentTarget.duration, true); if (mode === "sync") onCaptured?.({ marks: sorted(), duration: e.currentTarget.duration }); }} />
           </div>
         )}

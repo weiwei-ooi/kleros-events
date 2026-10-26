@@ -1,0 +1,571 @@
+"use client";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { supabaseBrowser } from "@/lib/supabase/client";
+import { openPdf, type PdfDoc } from "@/lib/pdf";
+import { addChunk, audioExt, canRecord, dropSession, pickMime, saveSession, sessionBlob, unsavedSessions, type RecSession } from "@/lib/recorder";
+import { fmtDur, fmtSize, slugify } from "@/lib/format";
+import type { SlideMark } from "@/lib/types";
+import { uploadToStorage } from "../admin/MaterialsManager";
+import TalkStage from "../TalkStage";
+import SlideCanvas from "./SlideCanvas";
+
+export interface RecTarget { key: string; agendaId: string | null; title: string; speaker: string; time?: string }
+export type RecPhase = "idle" | "setup" | "starting" | "recording" | "stopping" | "review" | "saving" | "saved";
+
+// ~21 MB an hour: a two-hour session stays under the 50 MB upload cap of the Supabase free tier.
+const BITRATE = 48_000;
+const WARN_BYTES = 45e6;
+const MAX_BYTES = 50e6;
+const LIVE_PING = "kleros-rec-live";
+
+function micError(e: unknown) {
+  const n = (e as Error)?.name;
+  if (n === "NotAllowedError" || n === "SecurityError") return "The browser blocked the microphone. Click the microphone icon in the address bar, allow access, then press Start recording again.";
+  if (n === "NotFoundError" || n === "OverconstrainedError") return "No microphone was found. Plug one in or check the laptop's sound settings, then try again.";
+  if (n === "NotReadableError" || n === "AbortError") return "The microphone is busy in another app (a video call, for example). Close it and try again.";
+  return `The recording could not start: ${(e as Error)?.message || "unknown error"}.`;
+}
+
+/** Clean slide marks for saving: sorted, one decimal, no repeats of the same slide back to back. */
+function tidy(marks: SlideMark[]): SlideMark[] {
+  const out: SlideMark[] = [];
+  for (const m of [...marks].sort((a, b) => a.t - b.t)) {
+    const t = Math.max(0, Math.round(m.t * 10) / 10);
+    if (out.length && out[out.length - 1].p === m.p) continue;
+    if (out.length && out[out.length - 1].t === t) out[out.length - 1] = { p: m.p, t };
+    else out.push({ p: m.p, t });
+  }
+  return out;
+}
+
+export default function Recorder({ eventId, slug, eventTitle, target, onPhase, onDone }: {
+  eventId: string; slug: string; eventTitle: string; target: RecTarget | null;
+  onPhase: (p: RecPhase, title?: string) => void; onDone: () => void;
+}) {
+  const [phase, setPhaseState] = useState<RecPhase>(target ? "setup" : "idle");
+  const [title, setTitle] = useState(target?.title ?? "");
+  const [speaker, setSpeaker] = useState(target?.speaker ?? "");
+  const [pdfFile, setPdfFile] = useState<Blob | null>(null);
+  const [pdfName, setPdfName] = useState("");
+  const [pdf, setPdf] = useState<PdfDoc | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfErr, setPdfErr] = useState("");
+  const [page, setPage] = useState(1);
+  const [marks, setMarks] = useState<SlideMark[]>([]);
+  const [secs, setSecs] = useState(0);
+  const [bytes, setBytes] = useState(0);
+  const [blob, setBlob] = useState<Blob | null>(null);
+  const [blobUrl, setBlobUrl] = useState("");
+  const [err, setErr] = useState("");
+  const [warn, setWarn] = useState("");
+  const [progress, setProgress] = useState("");
+  const [saved, setSaved] = useState<{ id: string; kind: "talk" | "audio" } | null>(null);
+  const [leftovers, setLeftovers] = useState<RecSession[]>([]);
+  const [confirm, setConfirm] = useState("");
+  const [backup, setBackup] = useState(true);
+  const [otherTab, setOtherTab] = useState(false);
+  const [supported, setSupported] = useState(true);
+
+  const media = useRef<MediaRecorder | null>(null);
+  const stream = useRef<MediaStream | null>(null);
+  const session = useRef<RecSession | null>(null);
+  const chunks = useRef<Blob[]>([]);
+  const wake = useRef<WakeLockSentinel | null>(null);
+  const t0 = useRef(0);
+  const marksRef = useRef<SlideMark[]>([]);
+  const meterBar = useRef<HTMLSpanElement>(null);
+  const audioCtx = useRef<AudioContext | null>(null);
+  const uploaded = useRef<{ pdf?: string; audio?: string }>({});
+  const liveIds = useRef<Map<string, number>>(new Map());
+
+  const setPhase = useCallback((p: RecPhase) => { setPhaseState(p); }, []);
+  useEffect(() => { onPhase(phase, title || target?.title); }, [phase, title, target, onPhase]);
+  useEffect(() => { setSupported(canRecord()); }, []);
+
+  // a new session picked from the agenda (only possible while nothing is recorded)
+  useEffect(() => {
+    if (!target) return;
+    setTitle(target.title); setSpeaker(target.speaker); setErr(""); setWarn("");
+    setPhase("setup");
+  }, [target, setPhase]);
+
+  // ---------- recovery and other tabs ----------
+  const refreshLeftovers = useCallback(async () => {
+    try {
+      const all = await unsavedSessions(eventId);
+      const now = Date.now();
+      // skip the one in progress here and any that another tab is still writing to
+      setLeftovers(all.filter((s) => s.id !== session.current?.id && now - (liveIds.current.get(s.id) ?? 0) > 8000 && now - (s.updatedAt ?? 0) > 12000));
+    } catch { setLeftovers([]); }
+  }, [eventId]);
+  useEffect(() => {
+    refreshLeftovers();
+    // a tab that crashed seconds ago still looks "in progress"; look again once it has gone quiet
+    const t = setTimeout(refreshLeftovers, 13000);
+    return () => clearTimeout(t);
+  }, [refreshLeftovers]);
+
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const bc = new BroadcastChannel(LIVE_PING);
+    bc.onmessage = (e: MessageEvent<{ id: string; eventId: string }>) => {
+      if (!e.data?.id || e.data.id === session.current?.id) return;
+      liveIds.current.set(e.data.id, Date.now());
+      setOtherTab(true);
+    };
+    const t = setInterval(() => {
+      if (media.current?.state === "recording" && session.current) bc.postMessage({ id: session.current.id, eventId });
+      const now = Date.now();
+      const anyLive = [...liveIds.current.values()].some((ts) => now - ts < 8000);
+      setOtherTab(anyLive);
+    }, 3000);
+    return () => { clearInterval(t); bc.close(); };
+  }, [eventId]);
+
+  // ---------- slides ----------
+  async function choosePdf(f: File | undefined) {
+    if (!f) return;
+    setPdfErr(""); setPdfBusy(true);
+    try {
+      const doc = await openPdf(await f.arrayBuffer());
+      setPdf(doc); setPdfFile(f); setPdfName(f.name); setPage(1);
+    } catch {
+      setPdf(null); setPdfFile(null); setPdfName("");
+      setPdfErr(`"${f.name}" could not be opened as a PDF. Choose another file, or record without slides.`);
+    }
+    setPdfBusy(false);
+  }
+  function removePdf() { setPdf(null); setPdfFile(null); setPdfName(""); setPage(1); setPdfErr(""); }
+
+  const go = useCallback((p: number) => {
+    if (!pdf) return;
+    const n = Math.max(1, Math.min(pdf.numPages, p));
+    if (n === page) return;
+    if (media.current?.state === "recording") {
+      const next = [...marksRef.current, { p: n, t: (Date.now() - t0.current) / 1000 }];
+      marksRef.current = next;
+      setMarks(next);
+      if (session.current) {
+        session.current = { ...session.current, marks: next, updatedAt: Date.now() };
+        saveSession(session.current).catch(() => setBackup(false));
+      }
+    }
+    setPage(n);
+  }, [pdf, page]);
+
+  useEffect(() => {
+    if (!pdf || !(phase === "setup" || phase === "recording")) return;
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement;
+      if (e.altKey || e.ctrlKey || e.metaKey || el.closest("input, textarea, select, [contenteditable]")) return;
+      if (["ArrowRight", "PageDown"].includes(e.key)) { e.preventDefault(); go(page + 1); }
+      if (["ArrowLeft", "PageUp"].includes(e.key)) { e.preventDefault(); go(page - 1); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pdf, phase, page, go]);
+
+  // ---------- recording ----------
+  useEffect(() => {
+    if (phase !== "recording") return;
+    const t = setInterval(() => setSecs((Date.now() - t0.current) / 1000), 500);
+    return () => clearInterval(t);
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase !== "recording") return;
+    const keep = () => { if (document.visibilityState === "visible") navigator.wakeLock?.request("screen").then((w) => { wake.current = w; }).catch(() => {}); };
+    document.addEventListener("visibilitychange", keep);
+    return () => document.removeEventListener("visibilitychange", keep);
+  }, [phase]);
+
+  useEffect(() => {
+    if (!["starting", "recording", "stopping", "review", "saving"].includes(phase)) return;
+    const warnLeave = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", warnLeave);
+    return () => window.removeEventListener("beforeunload", warnLeave);
+  }, [phase]);
+
+  useEffect(() => () => {
+    if (media.current?.state === "recording") media.current.stop();
+    stream.current?.getTracks().forEach((t) => t.stop());
+    audioCtx.current?.close().catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!blob) { setBlobUrl(""); return; }
+    const u = URL.createObjectURL(blob);
+    setBlobUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [blob]);
+
+  function meter(s: MediaStream) {
+    try {
+      const ctx = new AudioContext();
+      audioCtx.current = ctx;
+      const an = ctx.createAnalyser();
+      an.fftSize = 512;
+      ctx.createMediaStreamSource(s).connect(an);
+      const buf = new Uint8Array(an.fftSize);
+      const tick = () => {
+        if (media.current?.state !== "recording") { ctx.close().catch(() => {}); if (meterBar.current) meterBar.current.style.width = "0%"; return; }
+        an.getByteTimeDomainData(buf);
+        let sum = 0; for (const v of buf) sum += ((v - 128) / 128) ** 2;
+        const lvl = Math.min(1, Math.sqrt(sum / buf.length) * 4);
+        if (meterBar.current) meterBar.current.style.width = `${Math.round(lvl * 100)}%`;
+        requestAnimationFrame(tick);
+      };
+      tick();
+    } catch { /* the meter is a nicety; recording continues without it */ }
+  }
+
+  async function start() {
+    setErr(""); setWarn("");
+    if (!canRecord()) { setErr("This browser cannot record audio. Use a recent version of Chrome, Edge, Firefox or Safari."); return; }
+    setPhase("starting");
+    let s: MediaStream;
+    try {
+      s = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: true, autoGainControl: true } });
+    } catch (e) { setErr(micError(e)); setPhase("setup"); return; }
+    stream.current = s;
+
+    const mime = pickMime();
+    let mr: MediaRecorder;
+    try { mr = new MediaRecorder(s, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: BITRATE }); }
+    catch { try { mr = new MediaRecorder(s); } catch (e) { s.getTracks().forEach((t) => t.stop()); setErr(micError(e)); setPhase("setup"); return; } }
+
+    const startPage = pdf ? page : 1;
+    marksRef.current = pdf ? [{ p: startPage, t: 0 }] : [];
+    setMarks(marksRef.current);
+    chunks.current = []; uploaded.current = {}; setBytes(0); setSecs(0); setSaved(null);
+
+    const sess: RecSession = {
+      id: crypto.randomUUID(), eventId, startedAt: Date.now(), mime: mr.mimeType || mime || "audio/webm", seconds: 0,
+      title: title.trim(), speaker: speaker.trim(), agendaId: target?.agendaId ?? null,
+      marks: marksRef.current, pages: pdf?.numPages, pdf: pdf ? pdfFile : null, pdfName, bytes: 0, updatedAt: Date.now(),
+    };
+    session.current = sess;
+    let ok = true;
+    try { await saveSession(sess); } catch { ok = false; }
+    setBackup(ok);
+
+    let total = 0;
+    mr.ondataavailable = (e) => {
+      if (!e.data.size) return;
+      chunks.current.push(e.data);
+      total += e.data.size;
+      setBytes(total);
+      if (total > WARN_BYTES) setWarn("This recording is close to 50 MB, the upload limit. Stop at a natural break and start a new recording for the next part.");
+      const cur = session.current;
+      if (cur) {
+        addChunk(cur.id, e.data).catch(() => setBackup(false));
+        session.current = { ...cur, seconds: (Date.now() - t0.current) / 1000, marks: marksRef.current, bytes: total, updatedAt: Date.now() };
+        saveSession(session.current).catch(() => setBackup(false));
+      }
+    };
+    mr.onerror = () => setErr("The browser reported a recording error. What was captured so far is kept.");
+    mr.onstop = () => {
+      s.getTracks().forEach((t) => t.stop());
+      const dur = (Date.now() - t0.current) / 1000;
+      setSecs(dur);
+      const b = new Blob(chunks.current, { type: mr.mimeType || sess.mime });
+      if (session.current) {
+        session.current = { ...session.current, seconds: dur, marks: marksRef.current, updatedAt: Date.now() };
+        saveSession(session.current).catch(() => {});
+      }
+      setBlob(b);
+      setPhase("review");
+    };
+    s.getAudioTracks().forEach((t) => {
+      t.onended = () => {
+        if (media.current?.state === "recording") {
+          setWarn("The microphone disconnected, so the recording stopped. Everything captured up to that point is below.");
+          stop();
+        }
+      };
+    });
+
+    mr.start(4000);
+    media.current = mr;
+    t0.current = Date.now();
+    setPhase("recording");
+    wake.current = (await navigator.wakeLock?.request("screen").catch(() => null)) ?? null;
+    meter(s);
+  }
+
+  function stop() {
+    if (media.current?.state === "recording") { setPhase("stopping"); media.current.stop(); }
+    wake.current?.release().catch(() => {});
+    wake.current = null;
+  }
+
+  // ---------- after stop ----------
+  async function recover(s: RecSession) {
+    setErr(""); setConfirm("");
+    try {
+      const b = await sessionBlob(s);
+      if (!b.size) { setErr("Nothing was captured in that recording, so there is nothing to recover. It can be deleted."); return; }
+      session.current = s;
+      uploaded.current = {};
+      setTitle(s.title || target?.title || ""); setSpeaker(s.speaker || target?.speaker || "");
+      marksRef.current = s.marks ?? []; setMarks(marksRef.current);
+      setSecs(s.seconds); setBytes(b.size);
+      if (s.pdf) {
+        try { setPdf(await openPdf(await s.pdf.arrayBuffer())); setPdfFile(s.pdf); setPdfName(s.pdfName || "slides.pdf"); }
+        catch { setPdf(null); setPdfFile(null); setWarn("The slides kept with this recording could not be opened, so it will be saved as audio only."); }
+      } else { setPdf(null); setPdfFile(null); }
+      setBlob(b);
+      setLeftovers((l) => l.filter((x) => x.id !== s.id));
+      setPhase("review");
+    } catch (e) { setErr(`The recording could not be read from this laptop: ${(e as Error).message}`); }
+  }
+
+  async function deleteLeftover(s: RecSession) {
+    if (confirm !== s.id) { setConfirm(s.id); return; }
+    setConfirm("");
+    await dropSession(s.id).catch(() => {});
+    refreshLeftovers();
+  }
+
+  async function save() {
+    if (!blob || !session.current) return;
+    setErr(""); setPhase("saving");
+    const sb = supabaseBrowser();
+    const name = title.trim() || `${eventTitle} recording`;
+    const stamp = new Date(session.current.startedAt).toISOString().slice(0, 16).replace(":", "");
+    try {
+      const withSlides = !!(pdf && pdfFile);
+      if (withSlides && !uploaded.current.pdf) {
+        setProgress("Uploading slides…");
+        uploaded.current.pdf = await uploadToStorage(eventId, pdfFile!, pdfName || "slides.pdf");
+      }
+      if (!uploaded.current.audio) {
+        setProgress(`Uploading audio (${fmtSize(blob.size)})…`);
+        uploaded.current.audio = await uploadToStorage(eventId, blob, `${slugify(name) || "recording"}-${stamp}.${audioExt(blob.type)}`);
+      }
+      setProgress("Saving to the event…");
+      const base = { event_id: eventId, title: name, speaker: speaker.trim() || null, duration_seconds: Math.round(secs) };
+      const row: Record<string, unknown> = withSlides
+        ? { ...base, kind: "talk", pdf_path: uploaded.current.pdf, audio_path: uploaded.current.audio, pages: pdf!.numPages, marks: tidy(marks.length ? marks : [{ p: 1, t: 0 }]), size_bytes: blob.size + pdfFile!.size }
+        : { ...base, kind: "audio", file_path: uploaded.current.audio, size_bytes: blob.size };
+      const { data, error } = await sb.from("materials").insert(row).select("id").single();
+      if (error) throw error;
+      await dropSession(session.current.id).catch(() => {});
+      setSaved({ id: (data as { id: string }).id, kind: withSlides ? "talk" : "audio" });
+      setPhase("saved");
+    } catch (e) {
+      const raw = (e as Error).message || "unknown error";
+      const msg = /failed to fetch|network|load failed/i.test(raw) ? "the server could not be reached (check the wifi)" : raw;
+      const big = blob.size > MAX_BYTES ? " The file is larger than 50 MB, which the storage plan does not accept. Download a copy and share it with an admin instead." : "";
+      setErr(`Saving failed: ${msg}.${big} The recording is still safe on this laptop. Try again, or download a copy.`);
+      setPhase("review");
+    }
+    setProgress("");
+  }
+
+  function download() {
+    if (!blob) return;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${slug}-${slugify(title) || "recording"}.${audioExt(blob.type)}`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+  }
+
+  function reset() {
+    session.current = null; chunks.current = []; marksRef.current = []; uploaded.current = {};
+    setBlob(null); setMarks([]); setSecs(0); setBytes(0); setErr(""); setWarn(""); setConfirm(""); setSaved(null);
+    removePdf();
+  }
+
+  async function discard() {
+    if (confirm !== "discard") { setConfirm("discard"); return; }
+    if (session.current) await dropSession(session.current.id).catch(() => {});
+    reset(); setPhase(target ? "setup" : "idle"); refreshLeftovers();
+  }
+
+  function finish() { reset(); setPhase("idle"); refreshLeftovers(); onDone(); }
+
+  // ---------- view ----------
+  const recording = phase === "recording" || phase === "stopping";
+  const status = { idle: "", setup: "Ready", starting: "Starting", recording: "Recording", stopping: "Finishing", review: "Not saved yet", saving: "Saving", saved: "Saved" }[phase];
+  const pages = pdf?.numPages ?? 0;
+
+  const leftoverList = leftovers.length > 0 && (phase === "idle" || phase === "setup") && (
+    <div className="rec-recover">
+      <div className="rec-recover-h">Recover unsaved recording</div>
+      <p className="muted small">These recordings stopped before they were saved (the tab closed or the laptop restarted). They are stored on this laptop only.</p>
+      {leftovers.map((s) => (
+        <div key={s.id} className="rec-recover-row">
+          <div className="rec-recover-meta">
+            <b>{s.title || "Untitled recording"}</b>
+            <span className="muted small">{new Date(s.startedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · {fmtDur(s.seconds)}{s.pdf ? " · with slides" : ""}</span>
+          </div>
+          <div className="row-flex">
+            <button className="btn sm" onClick={() => recover(s)}>Recover</button>
+            <button className="btn sm ghost" onClick={() => deleteLeftover(s)}>{confirm === s.id ? "Delete for good?" : "Delete"}</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  if (phase === "idle") {
+    return (
+      <section className="con-panel rec rec-idle" aria-labelledby="rec-h">
+        <div className="con-panel-h"><h2 id="rec-h">Recording</h2></div>
+        <div className="rec-empty">
+          <div className="rec-empty-icon" aria-hidden="true"><span className="dot" /></div>
+          <b>Nothing is being recorded</b>
+          <p className="muted">Pick a session from the agenda and press <em>Record this session</em>. The laptop records the room audio, and if the speaker&apos;s slides are loaded, each slide change is time-stamped so the talk plays back in sync.</p>
+        </div>
+        {!supported && <div className="note">This browser cannot record audio. Use a recent version of Chrome, Edge, Firefox or Safari.</div>}
+        {leftoverList}
+        {err && <div className="note" role="alert">{err}</div>}
+      </section>
+    );
+  }
+
+  return (
+    <section className={`con-panel rec ${recording ? "is-rec" : ""}`} aria-labelledby="rec-h">
+      <div className="con-panel-h">
+        <div className="rec-title">
+          <div className="eyebrow">{target?.agendaId ? `Session${target.time ? ` · ${target.time}` : ""}` : "Session not on the agenda"}</div>
+          <h2 id="rec-h">{title || target?.title || "New recording"}</h2>
+          {(speaker || target?.speaker) && phase !== "review" && <div className="muted small">{speaker || target?.speaker}</div>}
+        </div>
+        {status && <span className={`rec-status s-${phase}`}>{recording && <span className="dot" />}{status}</span>}
+      </div>
+
+      {otherTab && !recording && <div className="note">Another tab on this laptop is recording right now. Stop it there first, or the two recordings will share the microphone.</div>}
+
+      {(phase === "setup" || phase === "starting") && (
+        <div className="rec-setup">
+          {!target?.agendaId && (
+            <div className="two">
+              <div className="field"><label htmlFor="rec-t">Title</label><input id="rec-t" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What this session is called" /></div>
+              <div className="field"><label htmlFor="rec-s">Speaker</label><input id="rec-s" value={speaker} onChange={(e) => setSpeaker(e.target.value)} placeholder="Full name" /></div>
+            </div>
+          )}
+
+          <div className="rec-step">
+            <div className="rec-step-h">
+              <span className="lbl">Slides <span className="muted">(optional)</span></span>
+              {pdf ? (
+                <span className="row-flex">
+                  <span className="muted small rec-file">{pdfName} · {pages} {pages === 1 ? "slide" : "slides"}</span>
+                  <button className="btn sm ghost" onClick={removePdf}>Remove</button>
+                </span>
+              ) : (
+                <label className={`btn sm ${pdfBusy ? "is-busy" : ""}`}>
+                  {pdfBusy ? "Opening…" : "Choose PDF"}
+                  <input type="file" hidden accept=".pdf,application/pdf" disabled={pdfBusy} onChange={(e) => { choosePdf(e.target.files?.[0]); e.target.value = ""; }} />
+                </label>
+              )}
+            </div>
+            {!pdf && !pdfErr && <p className="muted small">With slides loaded, click along during the talk and every slide change is time-stamped. The saved talk then plays with the slides in sync. Without slides, only the audio is saved.</p>}
+            {pdfErr && <div className="note">{pdfErr}</div>}
+            {pdf && (
+              <div className="rec-slides">
+                <SlideCanvas pdf={pdf} page={page} />
+                <div className="rec-slide-nav">
+                  <button className="btn sm" onClick={() => go(page - 1)} disabled={page <= 1}>‹ Previous</button>
+                  <span className="mono small">Start on slide {page} of {pages}</span>
+                  <button className="btn sm" onClick={() => go(page + 1)} disabled={page >= pages}>Next ›</button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="rec-go">
+            <button className="btn primary rec-start" onClick={start} disabled={phase === "starting" || !supported}>
+              <span className="dot" /> {phase === "starting" ? "Waiting for the microphone…" : "Start recording"}
+            </button>
+            <p className="muted small">Audio is kept on this laptop every few seconds while recording, so nothing is lost if the tab closes. Keep the laptop plugged in.</p>
+          </div>
+          {!supported && <div className="note">This browser cannot record audio. Use a recent version of Chrome, Edge, Firefox or Safari.</div>}
+        </div>
+      )}
+
+      {recording && (
+        <div className="rec-live">
+          <div className="rec-strip">
+            <div className="rec-clock">
+              <span className="mono rec-time" aria-live="off">{fmtDur(secs)}</span>
+              <span className="rec-meter" aria-label="Microphone level"><span ref={meterBar} /></span>
+            </div>
+            <span className="muted small mono">{fmtSize(bytes) || "0 KB"}</span>
+            <button className="btn rec-stop" onClick={stop} disabled={phase === "stopping"}>
+              <span className="sq" aria-hidden="true" /> {phase === "stopping" ? "Finishing…" : "Stop"}
+            </button>
+          </div>
+
+          {pdf ? (
+            <div className="rec-slides live">
+              <SlideCanvas pdf={pdf} page={page} />
+              <div className="rec-slide-nav">
+                <button className="btn" onClick={() => go(page - 1)} disabled={page <= 1}>‹ Previous</button>
+                <span className="mono small">Slide {page} of {pages} · {Math.max(0, marks.length - 1)} {marks.length === 2 ? "change" : "changes"}</span>
+                <button className="btn primary" onClick={() => go(page + 1)} disabled={page >= pages}>Next slide ›</button>
+              </div>
+              <p className="muted small rec-hint">Change slides when the speaker does. The ← and → keys and most presenter clickers work too.</p>
+            </div>
+          ) : (
+            <div className="rec-audio-only">
+              <b>Recording audio only</b>
+              <span className="muted small">Slides can be synced later from the event admin page with the talk builder.</span>
+            </div>
+          )}
+          {!backup && <div className="note">This browser is not keeping a backup copy (a private window, or storage is full). Keep this tab open until the recording is saved.</div>}
+        </div>
+      )}
+
+      {(phase === "review" || phase === "saving") && blob && (
+        <div className="rec-review">
+          {pdf ? (
+            <TalkStage pdf={pdf} mode="play" audioUrl={blobUrl} marks={tidy(marks)} notes={{}} knownDuration={secs} />
+          ) : (
+            <audio className="rec-audio" controls src={blobUrl || undefined} preload="metadata"
+              onLoadedMetadata={(e) => {
+                // MediaRecorder WebM has no duration header; seeking to the end once makes the browser compute it
+                const a = e.currentTarget;
+                if (isFinite(a.duration)) return;
+                const fix = () => { if (isFinite(a.duration)) { a.removeEventListener("durationchange", fix); a.currentTime = 0; } };
+                a.addEventListener("durationchange", fix);
+                a.currentTime = 1e101;
+              }} />
+          )}
+          <div className="two">
+            <div className="field"><label htmlFor="rv-t">Title</label><input id="rv-t" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={`${eventTitle} recording`} disabled={phase === "saving"} /></div>
+            <div className="field"><label htmlFor="rv-s">Speaker</label><input id="rv-s" value={speaker} onChange={(e) => setSpeaker(e.target.value)} placeholder="Full name" disabled={phase === "saving"} /></div>
+          </div>
+          <div className="rec-facts mono small">
+            <span>{fmtDur(secs)}</span><span>{fmtSize(blob.size)}</span>
+            <span>{pdf ? `${pages} slides · ${Math.max(0, tidy(marks).length - 1)} slide changes` : "Audio only"}</span>
+          </div>
+          {blob.size > WARN_BYTES && <div className="note">This file is {fmtSize(blob.size)}. Uploads above 50 MB are refused by the storage plan; if saving fails, download a copy and share it with an admin.</div>}
+          <div className="rec-actions">
+            <button className="btn primary" onClick={save} disabled={phase === "saving"}>{phase === "saving" ? progress || "Saving…" : pdf ? "Save talk to event" : "Save recording to event"}</button>
+            <button className="btn" onClick={download} disabled={phase === "saving"}>Download copy</button>
+            <span className="spacer" />
+            <button className="btn ghost danger" onClick={discard} disabled={phase === "saving"}>{confirm === "discard" ? "Discard for good?" : "Discard"}</button>
+          </div>
+        </div>
+      )}
+
+      {phase === "saved" && saved && (
+        <div className="rec-saved">
+          <div className="ok">Saved to the event. {saved.kind === "talk" ? "It plays with the slides in sync on the talk page." : "It is listed with the event's recordings."}</div>
+          <div className="row-flex">
+            <a className="btn" href={saved.kind === "talk" ? `/talks/${saved.id}` : `/events/${slug}#talks`} target="_blank" rel="noopener">{saved.kind === "talk" ? "Open the talk ↗" : "View on the event page ↗"}</a>
+            <button className="btn primary" onClick={finish}>Record another session</button>
+          </div>
+        </div>
+      )}
+
+      {warn && <div className="note" role="status">{warn}</div>}
+      {err && <div className="note" role="alert">{err}</div>}
+      {leftoverList}
+    </section>
+  );
+}

@@ -1,11 +1,16 @@
 "use client";
 // Event recording on the laptop: MediaRecorder chunks are written to IndexedDB as they
-// arrive, so a crashed tab or a closed lid doesn't lose the talk.
+// arrive, so a crashed tab or a closed lid doesn't lose the talk. The session record also
+// keeps the title, speaker, slide marks and the slides PDF, so a recovered recording can
+// still be saved as a slide-synced talk.
+
+import type { SlideMark } from "./types";
 
 const DB = "kleros-events-rec";
 
 function open(): Promise<IDBDatabase> {
   return new Promise((res, rej) => {
+    if (typeof indexedDB === "undefined") { rej(new Error("IndexedDB is not available")); return; }
     const r = indexedDB.open(DB, 1);
     r.onupgradeneeded = () => {
       const db = r.result;
@@ -18,10 +23,25 @@ function open(): Promise<IDBDatabase> {
 }
 
 function done(tx: IDBTransaction) {
-  return new Promise<void>((res, rej) => { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
+  return new Promise<void>((res, rej) => { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error); });
 }
 
-export interface RecSession { id: string; eventId: string; startedAt: number; mime: string; seconds: number }
+export interface RecSession {
+  id: string;
+  eventId: string;
+  startedAt: number;
+  mime: string;
+  seconds: number;
+  title?: string;
+  speaker?: string;
+  agendaId?: string | null;
+  marks?: SlideMark[];
+  pages?: number;
+  pdf?: Blob | null;
+  pdfName?: string;
+  bytes?: number;
+  updatedAt?: number;
+}
 
 export async function saveSession(s: RecSession) {
   const db = await open();
@@ -40,14 +60,14 @@ export async function addChunk(session: string, blob: Blob) {
 export async function unsavedSessions(eventId: string): Promise<RecSession[]> {
   const db = await open();
   const tx = db.transaction("sessions");
-  const all: RecSession[] = await new Promise((res) => { const r = tx.objectStore("sessions").getAll(); r.onsuccess = () => res(r.result); });
-  return all.filter((s) => s.eventId === eventId);
+  const all: RecSession[] = await new Promise((res, rej) => { const r = tx.objectStore("sessions").getAll(); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+  return all.filter((s) => s.eventId === eventId).sort((a, b) => b.startedAt - a.startedAt);
 }
 
 export async function sessionBlob(s: RecSession): Promise<Blob> {
   const db = await open();
   const tx = db.transaction("chunks");
-  const rows: { blob: Blob }[] = await new Promise((res) => { const r = tx.objectStore("chunks").index("session").getAll(s.id); r.onsuccess = () => res(r.result); });
+  const rows: { blob: Blob }[] = await new Promise((res, rej) => { const r = tx.objectStore("chunks").index("session").getAll(s.id); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
   return new Blob(rows.map((r) => r.blob), { type: s.mime });
 }
 
@@ -61,7 +81,16 @@ export async function dropSession(id: string) {
   await done(tx);
 }
 
+/** Opus in WebM where available (Chrome, Edge, Firefox), AAC in MP4 for Safari. */
 export function pickMime() {
-  for (const t of ["audio/webm;codecs=opus", "audio/mp4", "audio/webm"]) if (MediaRecorder.isTypeSupported(t)) return t;
+  if (typeof MediaRecorder === "undefined") return "";
+  for (const t of ["audio/webm;codecs=opus", "audio/webm", "audio/mp4;codecs=mp4a.40.2", "audio/mp4", "audio/ogg;codecs=opus"]) {
+    try { if (MediaRecorder.isTypeSupported(t)) return t; } catch { /* older Safari throws on unknown types */ }
+  }
   return "";
 }
+
+export const canRecord = () =>
+  typeof window !== "undefined" && typeof MediaRecorder !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
+
+export const audioExt = (type: string) => (/mp4|m4a|aac/.test(type) ? "m4a" : type.includes("ogg") ? "ogg" : "webm");
