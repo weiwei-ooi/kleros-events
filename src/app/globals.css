@@ -407,3 +407,5 @@ footer.site .base a { display: inline; color: var(--muted); text-decoration: und
   .prod { grid-template-columns: minmax(0, 1fr); }
   .prod > .small:last-child { grid-column: 1; grid-row: auto; }
 }
+
+.luma-sync { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: -8px; }

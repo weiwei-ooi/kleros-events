@@ -7,6 +7,7 @@ import { ROLE_SHORT } from "@/lib/kleros";
 import type { EventRow } from "@/lib/types";
 import NotTeam from "@/components/NotTeam";
 import RequestsTable from "@/components/RequestsTable";
+import LumaSync, { type SyncLog } from "@/components/admin/LumaSync";
 
 export const metadata: Metadata = { title: "Events desk" };
 export const dynamic = "force-dynamic";
@@ -21,11 +22,12 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const tab: Tab = (TABS as readonly string[]).includes(rawTab ?? "") ? (rawTab as Tab) : "upcoming";
 
   const sb = await supabaseServer();
-  const [ev, mats, reqs, counts] = await Promise.all([
+  const [ev, mats, reqs, counts, sync] = await Promise.all([
     sb.from("events").select("*").order("starts_on", { ascending: true }),
     sb.from("material_events").select("event_id"),
     sb.from("meeting_requests").select("*, events(title, slug)").order("created_at", { ascending: false }).limit(200),
     sb.from("event_counts").select("*"),
+    sb.from("luma_sync_log").select("ran_at, checked, updated, added, errors").order("ran_at", { ascending: false }).limit(1),
   ]);
   const events = (ev.data ?? []) as EventRow[];
   // links (0006); before that migration, count by materials.event_id
@@ -62,6 +64,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         </div>
         <Link className="btn primary" href="/admin/events/new">Add event</Link>
       </header>
+      <LumaSync last={((sync.data ?? [])[0] as SyncLog | undefined) ?? null} />
 
       <div className="seg adm-tabs" role="tablist" aria-label="Desk sections">
         {tabs.map((t) => (
