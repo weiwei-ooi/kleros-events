@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { openPdf, type PdfDoc } from "@/lib/pdf";
-import { addChunk, audioExt, canRecord, dropSession, pickMime, saveSession, sessionBlob, unsavedSessions, type RecSession } from "@/lib/recorder";
+import { addChunk, audioExt, canRecord, dropSession, pickMime, savePdf, saveSession, sessionBlob, sessionPdf, unsavedSessions, type RecSession } from "@/lib/recorder";
 import { fmtDur, fmtSize, slugify } from "@/lib/format";
 import type { SlideMark } from "@/lib/types";
 import { uploadToStorage } from "../admin/MaterialsManager";
@@ -14,8 +14,13 @@ export type RecPhase = "idle" | "setup" | "starting" | "recording" | "stopping" 
 
 // ~21 MB an hour: a two-hour session stays under the 50 MB upload cap of the Supabase free tier.
 const BITRATE = 48_000;
+// Each uploaded file must stay under 50 MB. The audio stops itself a little before that,
+// and slides above 45 MB are refused when chosen.
 const WARN_BYTES = 45e6;
+const STOP_BYTES = 48e6;
 const MAX_BYTES = 50e6;
+const MAX_PDF_BYTES = 45e6;
+const CAP_MSG = "Reached the 48 MB upload limit. Saved what was recorded; start a new recording for the rest.";
 const LIVE_PING = "kleros-rec-live";
 
 function micError(e: unknown) {
@@ -24,6 +29,21 @@ function micError(e: unknown) {
   if (n === "NotFoundError" || n === "OverconstrainedError") return "No microphone was found. Plug one in or check the laptop's sound settings, then try again.";
   if (n === "NotReadableError" || n === "AbortError") return "The microphone is busy in another app (a video call, for example). Close it and try again.";
   return `The recording could not start: ${(e as Error)?.message || "unknown error"}.`;
+}
+
+/**
+ * Recording clock. Elapsed time comes from the meter's AudioContext, whose currentTime only
+ * advances while audio is actually flowing (it stops when the laptop sleeps, like the
+ * recording does), so slide marks and the duration follow the audio rather than the wall
+ * clock. If the context cannot run (no Web Audio, or the browser suspends it), it falls back
+ * to the wall clock from that point on, which overcounts time the laptop spent asleep.
+ */
+interface RecClock { ctx: AudioContext | null; ctxT0: number; wallT0: number; useWall: boolean; stopAt: number | null }
+const newClock = (): RecClock => ({ ctx: null, ctxT0: 0, wallT0: Date.now(), useWall: true, stopAt: null });
+function clockNow(c: RecClock) {
+  if (c.stopAt != null) return c.stopAt;
+  if (!c.useWall && c.ctx && c.ctx.state === "running") return Math.max(0, c.ctx.currentTime - c.ctxT0);
+  return Math.max(0, (Date.now() - c.wallT0) / 1000);
 }
 
 /** Clean slide marks for saving: sorted, one decimal, no repeats of the same slide back to back. */
@@ -71,7 +91,9 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
   const session = useRef<RecSession | null>(null);
   const chunks = useRef<Blob[]>([]);
   const wake = useRef<WakeLockSentinel | null>(null);
-  const t0 = useRef(0);
+  const clock = useRef<RecClock>(newClock());
+  const starting = useRef(false);
+  const mounted = useRef(true);
   const marksRef = useRef<SlideMark[]>([]);
   const meterBar = useRef<HTMLSpanElement>(null);
   const audioCtx = useRef<AudioContext | null>(null);
@@ -125,7 +147,12 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
   // ---------- slides ----------
   async function choosePdf(f: File | undefined) {
     if (!f) return;
-    setPdfErr(""); setPdfBusy(true);
+    setPdfErr("");
+    if (f.size > MAX_PDF_BYTES) {
+      setPdfErr(`"${f.name}" is ${fmtSize(f.size)}. Slides over 45 MB cannot be uploaded. Export a smaller PDF (fewer or lighter images), or record without slides.`);
+      return;
+    }
+    setPdfBusy(true);
     try {
       const doc = await openPdf(await f.arrayBuffer());
       setPdf(doc); setPdfFile(f); setPdfName(f.name); setPage(1);
@@ -142,7 +169,7 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
     const n = Math.max(1, Math.min(pdf.numPages, p));
     if (n === page) return;
     if (media.current?.state === "recording") {
-      const next = [...marksRef.current, { p: n, t: (Date.now() - t0.current) / 1000 }];
+      const next = [...marksRef.current, { p: n, t: clockNow(clock.current) }];
       marksRef.current = next;
       setMarks(next);
       if (session.current) {
@@ -168,13 +195,14 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
   // ---------- recording ----------
   useEffect(() => {
     if (phase !== "recording") return;
-    const t = setInterval(() => setSecs((Date.now() - t0.current) / 1000), 500);
+    const t = setInterval(() => setSecs(clockNow(clock.current)), 500);
     return () => clearInterval(t);
   }, [phase]);
 
   useEffect(() => {
     if (phase !== "recording") return;
-    const keep = () => { if (document.visibilityState === "visible") navigator.wakeLock?.request("screen").then((w) => { wake.current = w; }).catch(() => {}); };
+    // the browser drops the wake lock when the tab is hidden; take it again on return
+    const keep = () => { if (document.visibilityState === "visible") lockScreen(); };
     document.addEventListener("visibilitychange", keep);
     return () => document.removeEventListener("visibilitychange", keep);
   }, [phase]);
@@ -186,10 +214,16 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
     return () => window.removeEventListener("beforeunload", warnLeave);
   }, [phase]);
 
-  useEffect(() => () => {
-    if (media.current?.state === "recording") media.current.stop();
-    stream.current?.getTracks().forEach((t) => t.stop());
-    audioCtx.current?.close().catch(() => {});
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (media.current?.state === "recording") media.current.stop();
+      stream.current?.getTracks().forEach((t) => t.stop());
+      closeAudio();
+      wake.current?.release().catch(() => {});
+      wake.current = null;
+    };
   }, []);
 
   useEffect(() => {
@@ -199,16 +233,49 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
     return () => URL.revokeObjectURL(u);
   }, [blob]);
 
-  function meter(s: MediaStream) {
+  async function lockScreen() {
+    const w = await navigator.wakeLock?.request("screen").catch(() => null);
+    if (!w) return;
+    // the recording may have stopped (or the console closed) while the request was pending
+    if (!mounted.current || media.current?.state !== "recording") { w.release().catch(() => {}); return; }
+    if (wake.current && wake.current !== w) wake.current.release().catch(() => {});
+    wake.current = w;
+  }
+
+  function closeAudio() {
+    const ctx = audioCtx.current;
+    audioCtx.current = null;
+    if (ctx && ctx.state !== "closed") ctx.close().catch(() => {});
+  }
+
+  /** Opens the AudioContext that drives both the level meter and the recording clock. */
+  function startAudio() {
+    const c = newClock();
+    clock.current = c;
     try {
       const ctx = new AudioContext();
       audioCtx.current = ctx;
+      c.ctx = ctx;
+      if (ctx.state === "running") { c.ctxT0 = ctx.currentTime; c.useWall = false; }
+      ctx.onstatechange = () => {
+        if (ctx.state === "running" || c.useWall || c.stopAt != null) return;
+        // suspended or closed mid-recording: carry on from here on the wall clock
+        c.wallT0 = Date.now() - Math.max(0, ctx.currentTime - c.ctxT0) * 1000;
+        c.useWall = true;
+      };
+    } catch { /* no Web Audio: wall clock and no meter */ }
+  }
+
+  function meter(s: MediaStream) {
+    const ctx = audioCtx.current;
+    if (!ctx) return;
+    try {
       const an = ctx.createAnalyser();
       an.fftSize = 512;
       ctx.createMediaStreamSource(s).connect(an);
       const buf = new Uint8Array(an.fftSize);
       const tick = () => {
-        if (media.current?.state !== "recording") { ctx.close().catch(() => {}); if (meterBar.current) meterBar.current.style.width = "0%"; return; }
+        if (media.current?.state !== "recording" || ctx.state === "closed") { if (meterBar.current) meterBar.current.style.width = "0%"; return; }
         an.getByteTimeDomainData(buf);
         let sum = 0; for (const v of buf) sum += ((v - 128) / 128) ** 2;
         const lvl = Math.min(1, Math.sqrt(sum / buf.length) * 4);
@@ -220,6 +287,13 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
   }
 
   async function start() {
+    // a double click, or a click while the previous recording is still finishing
+    if (starting.current || (media.current && media.current.state !== "inactive")) return;
+    starting.current = true;
+    try { await begin(); } finally { starting.current = false; }
+  }
+
+  async function begin() {
     setErr(""); setWarn("");
     if (!canRecord()) { setErr("This browser cannot record audio. Use a recent version of Chrome, Edge, Firefox or Safari."); return; }
     setPhase("starting");
@@ -242,11 +316,15 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
     const sess: RecSession = {
       id: crypto.randomUUID(), eventId, startedAt: Date.now(), mime: mr.mimeType || mime || "audio/webm", seconds: 0,
       title: title.trim(), speaker: speaker.trim(), agendaId: target?.agendaId ?? null,
-      marks: marksRef.current, pages: pdf?.numPages, pdf: pdf ? pdfFile : null, pdfName, bytes: 0, updatedAt: Date.now(),
+      marks: marksRef.current, pages: pdf?.numPages, hasPdf: !!(pdf && pdfFile), pdfName, pdfBytes: pdf && pdfFile ? pdfFile.size : 0,
+      bytes: 0, updatedAt: Date.now(),
     };
     session.current = sess;
     let ok = true;
-    try { await saveSession(sess); } catch { ok = false; }
+    try {
+      await saveSession(sess);
+      if (pdf && pdfFile) await savePdf(sess.id, pdfFile); // once; the session record keeps only metadata
+    } catch { ok = false; }
     setBackup(ok);
 
     let total = 0;
@@ -255,18 +333,21 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
       chunks.current.push(e.data);
       total += e.data.size;
       setBytes(total);
-      if (total > WARN_BYTES) setWarn("This recording is close to 50 MB, the upload limit. Stop at a natural break and start a new recording for the next part.");
+      if (total > WARN_BYTES) setWarn("This recording is close to 50 MB, the upload limit, and stops by itself at 48 MB. Stop at a natural break and start a new recording for the next part.");
       const cur = session.current;
       if (cur) {
         addChunk(cur.id, e.data).catch(() => setBackup(false));
-        session.current = { ...cur, seconds: (Date.now() - t0.current) / 1000, marks: marksRef.current, bytes: total, updatedAt: Date.now() };
+        session.current = { ...cur, seconds: clockNow(clock.current), marks: marksRef.current, bytes: total, updatedAt: Date.now() };
         saveSession(session.current).catch(() => setBackup(false));
       }
+      if (total >= STOP_BYTES && mr.state === "recording") { setWarn(CAP_MSG); stop(); }
     };
     mr.onerror = () => setErr("The browser reported a recording error. What was captured so far is kept.");
     mr.onstop = () => {
+      const dur = clockNow(clock.current);
+      clock.current.stopAt = dur;
       s.getTracks().forEach((t) => t.stop());
-      const dur = (Date.now() - t0.current) / 1000;
+      closeAudio();
       setSecs(dur);
       const b = new Blob(chunks.current, { type: mr.mimeType || sess.mime });
       if (session.current) {
@@ -287,14 +368,19 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
 
     mr.start(4000);
     media.current = mr;
-    t0.current = Date.now();
+    startAudio();
     setPhase("recording");
-    wake.current = (await navigator.wakeLock?.request("screen").catch(() => null)) ?? null;
     meter(s);
+    await lockScreen();
   }
 
   function stop() {
-    if (media.current?.state === "recording") { setPhase("stopping"); media.current.stop(); }
+    if (media.current?.state === "recording") {
+      // freeze the clock at the moment Stop is pressed; the last chunk arrives a little later
+      clock.current.stopAt = clockNow(clock.current);
+      setPhase("stopping");
+      media.current.stop();
+    }
     wake.current?.release().catch(() => {});
     wake.current = null;
   }
@@ -310,10 +396,14 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
       setTitle(s.title || target?.title || ""); setSpeaker(s.speaker || target?.speaker || "");
       marksRef.current = s.marks ?? []; setMarks(marksRef.current);
       setSecs(s.seconds); setBytes(b.size);
-      if (s.pdf) {
-        try { setPdf(await openPdf(await s.pdf.arrayBuffer())); setPdfFile(s.pdf); setPdfName(s.pdfName || "slides.pdf"); }
+      const kept = s.hasPdf ? await sessionPdf(s.id).catch(() => null) : null;
+      if (kept) {
+        try { setPdf(await openPdf(await kept.arrayBuffer())); setPdfFile(kept); setPdfName(s.pdfName || "slides.pdf"); }
         catch { setPdf(null); setPdfFile(null); setWarn("The slides kept with this recording could not be opened, so it will be saved as audio only."); }
-      } else { setPdf(null); setPdfFile(null); }
+      } else {
+        setPdf(null); setPdfFile(null);
+        if (s.hasPdf) setWarn("The slides kept with this recording could not be found, so it will be saved as audio only.");
+      }
       setBlob(b);
       setLeftovers((l) => l.filter((x) => x.id !== s.id));
       setPhase("review");
@@ -380,6 +470,11 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
 
   async function discard() {
     if (confirm !== "discard") { setConfirm("discard"); return; }
+    // a save that failed half way may have uploaded the slides or the audio already
+    const paths = [uploaded.current.pdf, uploaded.current.audio].filter((x): x is string => !!x);
+    if (paths.length) {
+      try { await supabaseBrowser().storage.from("materials").remove(paths); } catch { /* best effort */ }
+    }
     if (session.current) await dropSession(session.current.id).catch(() => {});
     reset(); setPhase(target ? "setup" : "idle"); refreshLeftovers();
   }
@@ -399,7 +494,7 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
         <div key={s.id} className="rec-recover-row">
           <div className="rec-recover-meta">
             <b>{s.title || "Untitled recording"}</b>
-            <span className="muted small">{new Date(s.startedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · {fmtDur(s.seconds)}{s.pdf ? " · with slides" : ""}</span>
+            <span className="muted small">{new Date(s.startedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · {fmtDur(s.seconds)}{s.hasPdf ? " · with slides" : ""}</span>
           </div>
           <div className="row-flex">
             <button className="btn sm" onClick={() => recover(s)}>Recover</button>
@@ -494,7 +589,9 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
               <span className="mono rec-time" aria-live="off">{fmtDur(secs)}</span>
               <span className="rec-meter" aria-label="Microphone level"><span ref={meterBar} /></span>
             </div>
-            <span className="muted small mono">{fmtSize(bytes) || "0 KB"}</span>
+            <span className="muted small mono" title="Each file must stay under 50 MB to upload">
+              {fmtSize(bytes) || "0 KB"}{pdfFile ? ` + ${fmtSize(pdfFile.size)} slides` : ""}
+            </span>
             <button className="btn rec-stop" onClick={stop} disabled={phase === "stopping"}>
               <span className="sq" aria-hidden="true" /> {phase === "stopping" ? "Finishing…" : "Stop"}
             </button>
@@ -540,10 +637,14 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
             <div className="field"><label htmlFor="rv-s">Speaker</label><input id="rv-s" value={speaker} onChange={(e) => setSpeaker(e.target.value)} placeholder="Full name" disabled={phase === "saving"} /></div>
           </div>
           <div className="rec-facts mono small">
-            <span>{fmtDur(secs)}</span><span>{fmtSize(blob.size)}</span>
+            <span>{fmtDur(secs)}</span><span>{fmtSize(blob.size)}{pdf && pdfFile ? ` + ${fmtSize(pdfFile.size)} slides` : ""}</span>
             <span>{pdf ? `${pages} slides · ${Math.max(0, tidy(marks).length - 1)} slide changes` : "Audio only"}</span>
           </div>
-          {blob.size > WARN_BYTES && <div className="note">This file is {fmtSize(blob.size)}. Uploads above 50 MB are refused by the storage plan; if saving fails, download a copy and share it with an admin.</div>}
+          {(blob.size > WARN_BYTES || (pdf && pdfFile && pdfFile.size > MAX_PDF_BYTES)) && (
+            <div className="note">
+              Each file must stay under 50 MB for the storage plan. The audio is {fmtSize(blob.size)}{pdf && pdfFile ? ` and the slides are ${fmtSize(pdfFile.size)}` : ""}. If saving fails, download a copy and share it with an admin.
+            </div>
+          )}
           <div className="rec-actions">
             <button className="btn primary" onClick={save} disabled={phase === "saving"}>{phase === "saving" ? progress || "Saving…" : pdf ? "Save talk to event" : "Save recording to event"}</button>
             <button className="btn" onClick={download} disabled={phase === "saving"}>Download copy</button>
