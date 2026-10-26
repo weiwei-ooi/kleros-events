@@ -130,6 +130,7 @@ export default function MaterialRow({ m, eventTitle, eventSlug }: { m: Material;
       </div>
       <div className="acts">
         {isWatchable(m) && <Link className="btn sm primary" href={`/talks/${m.id}`}>▶ Watch</Link>}
+        {m.kind === "audio" && m.file_path && <Link className="btn sm" href={`/talks/${m.id}`}>Transcript</Link>}
         {m.kind === "slides" && m.file_path && <Link className="btn sm" href={`/talks/${m.id}`}>View slides</Link>}
         {m.kind === "slides" && !m.file_path && m.url && <a className="btn sm" href={m.url} target="_blank" rel="noopener">View slides ↗</a>}
         {!isWatchable(m) && m.kind !== "slides" && !(m.kind === "audio" && m.file_path) && href && <a className="btn sm" href={href} target="_blank" rel="noopener">Open ↗</a>}
