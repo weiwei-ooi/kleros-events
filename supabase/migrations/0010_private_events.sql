@@ -20,7 +20,9 @@ do $$ begin
     alter table events add constraint events_visibility_check check (visibility in ('public', 'private'));
   end if;
 end $$;
-alter table events alter column created_by set default auth.uid();
+-- created_by is filled in by the events_keep_creator trigger below (not by a column default), so
+-- events the Luma and feed jobs import stay without a creator whoever presses Sync now.
+alter table events alter column created_by drop default;
 create index if not exists events_private on events (created_by) where visibility = 'private';
 
 create table if not exists event_collaborators (
@@ -208,7 +210,9 @@ create or replace function events_keep_creator() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
   if tg_op = 'INSERT' then
-    new.created_by := coalesce(new.created_by, auth.uid());
+    if coalesce(current_setting('app.importing', true), '') <> 'on' then
+      new.created_by := coalesce(new.created_by, auth.uid());
+    end if;
   else
     if auth.uid() is not null and new.visibility is distinct from old.visibility then
       if new.visibility = 'private' and not coalesce(old.created_by = auth.uid() or (old.created_by is null and is_admin()), false) then
@@ -220,9 +224,11 @@ begin
     end if;
     new.created_by := coalesce(old.created_by, case when new.visibility = 'private' then auth.uid() end);
   end if;
-  -- a private event's address gets a random ending, so nobody can guess it (or learn that it
-  -- exists from a "slug taken" error)
-  if new.visibility = 'private' and (tg_op = 'INSERT' or old.visibility = 'public') and new.slug !~ '-[0-9a-f]{8}$' then
+  -- an event created private gets a random ending on its address, so nobody can guess it (or
+  -- learn that it exists from a "slug taken" error)
+  -- (an event made private later keeps its address: it was public already, and the Luma and feed
+  -- jobs recognise it by it and leave it alone)
+  if tg_op = 'INSERT' and new.visibility = 'private' and new.slug !~ '-[0-9a-f]{8}$' then
     new.slug := new.slug || '-' || left(md5(gen_random_uuid()::text), 8);
   elsif tg_op = 'UPDATE' and old.visibility = 'private' and new.visibility = 'public' and new.slug = old.slug
         and new.slug ~ '-[0-9a-f]{8}$'
@@ -296,7 +302,7 @@ drop policy if exists "editors add materials" on materials;
 drop policy if exists "editors change materials" on materials;
 drop policy if exists "editors remove materials" on materials;
 create policy "materials are public" on materials for select
-  using ((event_id is not null and can_see_event(event_id)) or material_visible(id));
+  using ((event_id is null and is_team()) or (event_id is not null and can_see_event(event_id)) or material_visible(id));
 create policy "editors add materials" on materials for insert to authenticated
   with check (case when event_id is null then is_team() else can_edit_event(event_id) end);
 create policy "editors change materials" on materials for update to authenticated
@@ -360,8 +366,19 @@ drop policy if exists "team links materials" on material_events;
 drop policy if exists "team unlinks materials" on material_events;
 create policy "links of visible events are public" on material_events for select
   using (can_see_event(event_id));
+-- A private event can only take materials that already belong to private events only, all of
+-- which the caller can edit. Library items and anything on a public event stay with the team:
+-- to show a public video in a private event, add it there as a new link.
+create or replace function material_private_only(p_material uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from material_events me where me.material_id = p_material)
+     and not exists (select 1 from material_events me join events e on e.id = me.event_id
+                      where me.material_id = p_material and not (e.visibility = 'private' and can_edit_event(e.id)))
+$$;
+grant execute on function material_private_only(uuid) to authenticated;
 create policy "team links materials" on material_events for insert to authenticated
-  with check (can_edit_event(event_id) and material_visible(material_id));
+  with check (can_edit_event(event_id) and material_visible(material_id)
+              and (not event_is_private(event_id) or material_private_only(material_id)));
 create policy "team unlinks materials" on material_events for delete to authenticated
   using (can_edit_event(event_id));
 
@@ -543,14 +560,19 @@ declare
   v_checked int := 0; v_updated int := 0; v_added int := 0; v_errors text[] := '{}';
   v_id uuid; v_new_slug text; v_hosts text[]; v_region text; v_rows int;
   u text; p text; v_kleros_hosted boolean;
+  v_private text[];
 begin
   if auth.uid() is not null and not is_team() then
     raise exception 'Only the Kleros team can sync from Luma';
   end if;
+  perform set_config('app.importing', 'on', true);
 
   -- 1. events already on the site that point at Luma
   select coalesce(array_agg(distinct luma_slug(url)), '{}') into v_slugs
     from events where luma_slug(url) is not null and visibility = 'public';
+  -- Luma events that a private event points at are left alone (an event made private stays off the site)
+  select coalesce(array_agg(distinct luma_slug(url)), '{}') into v_private
+    from events where luma_slug(url) is not null and visibility = 'private';
 
   -- 2. public events hosted by Kleros | Events or Wei Wei, upcoming and past
   foreach u in array kleros_people loop
@@ -565,7 +587,7 @@ begin
     end loop;
   end loop;
 
-  foreach v_slug in array (select coalesce(array_agg(distinct s), '{}') from unnest(v_slugs) s where s is not null) loop
+  foreach v_slug in array (select coalesce(array_agg(distinct s), '{}') from unnest(v_slugs) s where s is not null and s <> all (v_private)) loop
     v_checked := v_checked + 1;
     d := luma_get('/url?url=' || v_slug);
     if d is null or d ->> 'kind' <> 'event' then
@@ -579,7 +601,7 @@ begin
     v_start := (e ->> 'start_at')::timestamptz;
     v_end := (e ->> 'end_at')::timestamptz;
 
-    select id into v_id from events where luma_slug(url) = v_slug and visibility = 'public' limit 1;
+    select id into v_id from events where luma_slug(url) = v_slug limit 1;
     v_kleros_hosted := exists (select 1 from jsonb_array_elements(d -> 'hosts') h where h ->> 'api_id' = kleros_user);
     if v_id is not null and not v_kleros_hosted then
       -- someone else's event (Kleros spoke, sponsored or ran one session): only the image follows Luma,
@@ -672,6 +694,7 @@ begin
   if auth.uid() is not null and not is_team() then
     raise exception 'Only the Kleros team can sync the feed';
   end if;
+  perform set_config('app.importing', 'on', true);
 
   v_feed := feed_get();
   if v_feed is null then
