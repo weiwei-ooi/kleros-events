@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getMaterial } from "@/lib/data";
@@ -12,6 +13,7 @@ import RecordingSlides from "@/components/studio/RecordingSlides";
 import { getTranscript, transcriptSetup } from "@/lib/transcript/data";
 import TranscriptArea from "@/components/transcript/TranscriptArea";
 import { MediaPlayer, YouTubePlayer } from "@/components/transcript/MediaPlayers";
+import StartAt from "@/components/transcript/StartAt";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -83,6 +85,7 @@ export default async function TalkPage({ params }: { params: Promise<{ id: strin
         )}
       </div>
       {(m.kind === "talk" || m.kind === "audio") && <RecordingSlides m={m} canEdit={canEdit} />}
+      {canSeek && <Suspense><StartAt /></Suspense>}
       {recorded && (transcript || isTeam) ? (
         <TranscriptArea materialId={m.id} title={m.title} speaker={m.speaker} initial={transcript} isTeam={isTeam}
           canSeek={canSeek} canTranscribe={canTranscribe} setup={transcriptSetup()} durationHint={m.duration_seconds}>

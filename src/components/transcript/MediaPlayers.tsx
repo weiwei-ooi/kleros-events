@@ -6,23 +6,31 @@ import { emitTime, onSeek } from "@/lib/transcript/client";
 /** Native audio or video element, wired to the transcript. Fixes the missing duration of MediaRecorder WebM. */
 export function MediaPlayer({ src, kind, title }: { src: string; kind: "audio" | "video"; title: string }) {
   const el = useRef<HTMLMediaElement | null>(null);
-  const fixing = useRef(false);
+  const fixing = useRef<(() => void) | null>(null);
+  // WebM from MediaRecorder has no duration until the browser has seen its end once
+  const fixDuration = (m: HTMLMediaElement) => {
+    if (fixing.current || isFinite(m.duration)) return;
+    const fix = () => { if (!isFinite(m.duration)) return; endFix(m); m.currentTime = 0; };
+    fixing.current = fix;
+    m.addEventListener("durationchange", fix);
+    m.currentTime = 1e101;
+  };
+  const endFix = (m: HTMLMediaElement) => {
+    if (fixing.current) m.removeEventListener("durationchange", fixing.current);
+    fixing.current = null;
+  };
+  // a server-rendered element can load its metadata before React listens for it
+  useEffect(() => { const m = el.current; if (m && m.readyState >= HTMLMediaElement.HAVE_METADATA) fixDuration(m); }, []);
   useEffect(() => onSeek((t) => {
-    const m = el.current; if (!m) return;
+    const m = el.current; if (!m) return false;
+    // a jump asked for now wins over the duration fix still running
+    endFix(m);
     m.currentTime = t;
     m.play().catch(() => {});
   }), []);
   const common = {
     src, preload: "metadata" as const, controls: true, "aria-label": title,
-    onLoadedMetadata: (e: React.SyntheticEvent<HTMLMediaElement>) => {
-      const m = e.currentTarget;
-      if (isFinite(m.duration)) return;
-      // WebM from MediaRecorder has no duration until the browser has seen its end once
-      fixing.current = true;
-      const fix = () => { if (!isFinite(m.duration)) return; m.removeEventListener("durationchange", fix); m.currentTime = 0; fixing.current = false; };
-      m.addEventListener("durationchange", fix);
-      m.currentTime = 1e101;
-    },
+    onLoadedMetadata: (e: React.SyntheticEvent<HTMLMediaElement>) => fixDuration(e.currentTarget),
     onTimeUpdate: (e: React.SyntheticEvent<HTMLMediaElement>) => { if (!fixing.current) emitTime(e.currentTarget.currentTime, !e.currentTarget.paused); },
     onPlay: (e: React.SyntheticEvent<HTMLMediaElement>) => emitTime(e.currentTarget.currentTime, true),
     onPause: (e: React.SyntheticEvent<HTMLMediaElement>) => emitTime(e.currentTarget.currentTime, false),
@@ -62,6 +70,10 @@ function loadYouTubeApi(): Promise<void> {
 export function YouTubePlayer({ id, title }: { id: string; title: string }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const player = useRef<YTPlayer | null>(null);
+  // a seek asked for before the player is ready (the API loads after the page), applied on ready
+  const ready = useRef(false);
+  const failed = useRef(false);
+  const wanted = useRef<number | null>(null);
   useEffect(() => {
     let alive = true;
     let poll: ReturnType<typeof setInterval> | undefined;
@@ -69,6 +81,11 @@ export function YouTubePlayer({ id, title }: { id: string; title: string }) {
       if (!alive || !frame.current || !window.YT) return;
       player.current = new window.YT.Player(frame.current, {
         events: {
+          onReady: () => {
+            ready.current = true;
+            const t = wanted.current; wanted.current = null;
+            if (t !== null && player.current) { player.current.seekTo(t, true); player.current.playVideo(); }
+          },
           onStateChange: (e: { data: number }) => {
             const p = player.current; if (!p) return;
             emitTime(p.getCurrentTime(), e.data === 1);
@@ -77,8 +94,13 @@ export function YouTubePlayer({ id, title }: { id: string; title: string }) {
           },
         },
       });
-    }).catch(() => { /* plain embed keeps working */ });
-    const off = onSeek((t) => { const p = player.current; if (!p) return; p.seekTo(t, true); p.playVideo(); });
+    }).catch(() => { failed.current = true; /* plain embed keeps working, but cannot be told to jump */ });
+    const off = onSeek((t) => {
+      if (failed.current) return false;
+      const p = player.current;
+      if (!p || !ready.current) { wanted.current = t; return; }
+      p.seekTo(t, true); p.playVideo();
+    });
     return () => { alive = false; off(); clearInterval(poll); };
   }, []);
   return (

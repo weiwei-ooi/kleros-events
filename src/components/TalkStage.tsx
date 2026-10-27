@@ -38,7 +38,26 @@ export default function TalkStage({ pdf, mode, audioUrl, marks, notes, onNotes, 
   const box = useRef<HTMLDivElement>(null);
   const rec = useRef<{ mr: MediaRecorder; stream: MediaStream; t0: number; chunks: Blob[] } | null>(null);
   const renderSeq = useRef(0);
-  const fixing = useRef(false);
+  // the WebM duration fix in progress (its durationchange listener), and whether the page asked for a moment
+  const fixing = useRef<(() => void) | null>(null);
+  const sought = useRef(false);
+  const endFix = (a: HTMLMediaElement) => {
+    if (fixing.current) a.removeEventListener("durationchange", fixing.current);
+    fixing.current = null;
+  };
+  const onMeta = (a: HTMLMediaElement) => {
+    if (isFinite(a.duration)) { setDur(a.duration); return; }
+    if (fixing.current) return;
+    // WebM from MediaRecorder reports Infinity until the browser has seen the end once
+    const fix = () => {
+      if (!isFinite(a.duration)) return;
+      endFix(a);
+      setDur(a.duration); a.currentTime = sought.current ? a.currentTime : startAt || 0;
+    };
+    fixing.current = fix;
+    a.addEventListener("durationchange", fix);
+    a.currentTime = 1e101;
+  };
 
   const sorted = () => [...live.current].sort((a, b) => a.t - b.t);
   const startOf = (p: number) => sorted().find((m) => m.p === p)?.t ?? 0;
@@ -63,11 +82,18 @@ export default function TalkStage({ pdf, mode, audioUrl, marks, notes, onNotes, 
   useEffect(() => { draw(page); }, [page, draw]);
   useEffect(() => { const r = () => draw(page); window.addEventListener("resize", r); return () => window.removeEventListener("resize", r); }, [page, draw]);
   useEffect(() => () => { rec.current?.stream.getTracks().forEach((t) => t.stop()); }, []);
-  useEffect(() => { if (audio.current && startAt) audio.current.currentTime = startAt; }, [startAt, audioUrl]);
+  useEffect(() => { if (audio.current && startAt && !sought.current && !fixing.current) audio.current.currentTime = startAt; }, [startAt, audioUrl]);
+  // a server-rendered element can load its metadata before React listens for it
+  useEffect(() => { const a = audio.current; if (a && a.readyState >= HTMLMediaElement.HAVE_METADATA) onMeta(a); }, [audioUrl]); // eslint-disable-line react-hooks/exhaustive-deps
   // transcript lines and chapters on the talk page ask the player to jump (play and review only)
   useEffect(() => {
     if (mode !== "play" && mode !== "review") return;
-    return onSeek((t) => { const a = audio.current; if (!a) return; a.currentTime = t; a.play().catch(() => {}); });
+    return onSeek((t) => {
+      const a = audio.current; if (!a) return false;
+      sought.current = true;
+      endFix(a);
+      a.currentTime = t; a.play().catch(() => {});
+    });
   }, [mode]);
 
   const go = (p: number) => {
@@ -153,19 +179,8 @@ export default function TalkStage({ pdf, mode, audioUrl, marks, notes, onNotes, 
             </div>
             <button className="btn sm ghost" onClick={() => { const r = [1, 1.25, 1.5, 2, 0.75]; const n = r[(r.indexOf(rate) + 1) % r.length]; audio.current!.playbackRate = n; setRate(n); }}>{rate}×</button>
             <audio ref={audio} src={audioUrl} preload="metadata" hidden
-              onLoadedMetadata={(e) => {
-                const a = e.currentTarget;
-                if (isFinite(a.duration)) { setDur(a.duration); return; }
-                // WebM from MediaRecorder reports Infinity until the browser has seen the end once
-                fixing.current = true;
-                const fix = () => {
-                  if (!isFinite(a.duration)) return;
-                  a.removeEventListener("durationchange", fix);
-                  setDur(a.duration); a.currentTime = startAt || 0; fixing.current = false;
-                };
-                a.addEventListener("durationchange", fix);
-                a.currentTime = 1e101;
-              }}
+              onLoadedMetadata={(e) => onMeta(e.currentTarget)}
+              onDurationChange={(e) => { if (!fixing.current && isFinite(e.currentTarget.duration)) setDur(e.currentTarget.duration); }}
               onPlay={(e) => { setPlaying(true); emitTime(e.currentTarget.currentTime, true); }} onPause={(e) => { setPlaying(false); emitTime(e.currentTarget.currentTime, false); }}
               onTimeUpdate={(e) => { if (fixing.current) return; const t = e.currentTarget.currentTime; setTime(t); emitTime(t, !e.currentTarget.paused); onProgress?.(t, false); if (mode === "play" || mode === "review") { const p = pageAt(t); if (p !== page) setPage(p); } }}
               onEnded={(e) => { onProgress?.(e.currentTarget.duration, true); if (mode === "sync") onCaptured?.({ marks: sorted(), duration: e.currentTarget.duration }); }} />

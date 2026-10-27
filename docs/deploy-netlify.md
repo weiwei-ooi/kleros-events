@@ -21,8 +21,8 @@ Set these under **Site configuration → Environment variables**.
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | yes | Same place. This key is public by design; the database rules protect the data. |
 | `NEXT_PUBLIC_SITE_URL` | no | Leave unset. Netlify's main site address is used for share links, QR codes and calendar files, and that becomes `https://events.kleros.io` once the domain is set as primary. |
 | `GROQ_API_KEY` | no | Turns on transcripts of recordings. Mark it as secret. |
-| `ANTHROPIC_API_KEY` | no | Turns on talk summaries. Mark it as secret. |
-| `SUPABASE_SERVICE_ROLE_KEY` | no | Only so that a failed transcript run can always record its error. Mark it as secret. |
+| `ANTHROPIC_API_KEY` | no | Turns on talk summaries and the site assistant (the Ask button). Mark it as secret. Other `ASK_*` settings are in the README under "Site assistant". |
+| `SUPABASE_SERVICE_ROLE_KEY` | no | Lets a failed transcript run always record its error, and keeps the assistant's question limits in the database (with migration `0013_ask.sql`). Mark it as secret. |
 
 Changing a variable needs a new deploy before it takes effect.
 

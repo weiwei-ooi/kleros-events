@@ -5,8 +5,10 @@ import "./styles/console.css";
 import "./styles/admin.css";
 import "./styles/transcript.css";
 import "./styles/studio.css";
+import "./styles/ask.css";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
+import AskLauncher from "@/components/ask/AskLauncher";
 import { SITE_URL } from "@/lib/kleros";
 
 // Kleros house faces: Instrument Serif for display, Geist for text, a mono for chips.
@@ -29,6 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SiteHeader />
         <main>{children}</main>
         <SiteFooter />
+        <AskLauncher />
       </body>
     </html>
   );

@@ -10,6 +10,7 @@ The public record of every event Kleros hosts or takes part in (conferences, sid
 - **Talk player:** the PDF deck is synced to the audio recording. Each slide change is timestamped, the timeline is split by slide, clicking a slide jumps the audio, and there are notes per slide.
 - **My events** (magic-link sign-in): saved, going and attended events, private notes, recommendations from topics, region and role, "Talks you missed", and "Continue watching".
 - Calendar file for every event (`/events/<slug>/calendar.ics`) and a projector view for live Q&A (`/events/<slug>/live`).
+- **Ask** (the ✦ button on every page): questions about events, talks and recordings, answered by Claude from the site's own data with links to the pages and to the moment in a recording (`/talks/<id>?t=<seconds>`). It reads with the visitor's own access, so private and draft events never reach an answer for someone who cannot see them. See "Site assistant" below.
 
 **For the Kleros team** (`/admin`, for accounts with team access, see "Team access" below)
 - Events desk: Upcoming, Past and Drafts tabs, each row with **Run live** (the host console at `/events/<slug>/host`), **Edit** and **View**. Past events with no materials are flagged "Needs materials". A Meeting requests tab holds the "Meet Kleros" inbox.
@@ -43,6 +44,22 @@ Open an event while signed in with a Kleros account and press **Event mode** (or
 - Move the mouse to bring up the control bar. **Start recording** records from the laptop microphone. Audio is written to the browser's storage every few seconds, so a crash or a closed lid doesn't lose it; reopen event mode and press **Recover unsaved recording**.
 - **Stop**, name the recording and press **Save to event**. It uploads to the event page as an audio file. **Download copy** keeps a local backup.
 - Hover a question to show it big, mark it answered or hide it.
+
+## Site assistant
+
+Off until the deployment has an Anthropic key; until then only the team sees the button, with a note on how to switch it on.
+
+| Variable | What it does |
+|---|---|
+| `ANTHROPIC_API_KEY` | Turns the assistant on (and talk summaries). In the Anthropic Console, spend limits are set per workspace, not per key: create the key in a workspace of its own and give that workspace a monthly limit. |
+| `ASK_ANTHROPIC_API_KEY` | Optional: a key for the assistant alone, from another workspace with its own limit, so the assistant reaching its limit never stops talk summaries. |
+| `SUPABASE_SERVICE_ROLE_KEY` + migration `0013_ask.sql` | Optional but recommended: question limits are kept in the database, so they hold across server instances. Without them each instance counts on its own. |
+| `ASK_PUBLIC=off` | Only signed-in accounts can ask. |
+| `ASK_MODEL`, `ASK_EFFORT` | Model (default `claude-opus-5-5`; `ANTHROPIC_MODEL` only changes the summaries) and effort (`low`, `medium` default, `high`). |
+| `ASK_LIMIT_VISITOR`, `ASK_LIMIT_VISITOR_DAILY`, `ASK_LIMIT_SIGNED_IN`, `ASK_LIMIT_SIGNED_IN_DAILY`, `ASK_LIMIT_TEAM`, `ASK_LIMIT_DAILY_TOTAL` | Questions per 10 minutes and per day (defaults 8 and 30 for visitors, 20 and 60 for accounts, 60 per 10 minutes for the team, 600 a day in all outside the team). |
+| `ASK_COST_UNITS` | Most one question may use, in input-token units (default 800000); past it the answer is written from what was read. |
+
+Migration `0013_ask.sql` also lets the database pick the matching transcript lines, so a search does not download whole transcripts.
 
 ## Deploy
 

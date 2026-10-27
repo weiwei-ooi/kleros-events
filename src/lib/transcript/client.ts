@@ -65,31 +65,31 @@ export async function runTranscript(materialId: string, onStatus: (s: Transcript
 
 const SEEK = "kleros:media-seek";
 const TIME = "kleros:media-time";
-let last = { t: 0, playing: false };
+type MediaTime = { t: number; playing: boolean };
 
-/** Asks the player on the page to jump to t seconds and play. */
-export function seekTo(t: number) {
-  window.dispatchEvent(new CustomEvent(SEEK, { detail: t }));
+/** Asks the player on the page to jump to t seconds and play. Returns whether a player took it. */
+export function seekTo(t: number): boolean {
+  return !window.dispatchEvent(new CustomEvent(SEEK, { detail: t, cancelable: true }));
 }
 
 /** Players call this on timeupdate / play / pause. */
 export function emitTime(t: number, playing: boolean) {
-  last = { t, playing };
-  window.dispatchEvent(new CustomEvent(TIME, { detail: last }));
+  window.dispatchEvent(new CustomEvent<MediaTime>(TIME, { detail: { t, playing } }));
 }
 
-/** Players subscribe to seek requests. Returns the unsubscribe function. */
-export function onSeek(fn: (t: number) => void) {
-  const h = (e: Event) => fn((e as CustomEvent<number>).detail);
+/** Players subscribe to seek requests; a handler returns false when it could not take one. Returns the unsubscribe function. */
+export function onSeek(fn: (t: number) => boolean | void) {
+  const h = (e: Event) => { if (fn((e as CustomEvent<number>).detail) !== false) e.preventDefault(); };
   window.addEventListener(SEEK, h);
   return () => window.removeEventListener(SEEK, h);
 }
 
 /** Current playback time and state of whichever player is on the page. */
 export function useMediaTime() {
-  const [s, set] = useState(last);
+  // starts at rest on every page: a player reports within a moment once it plays
+  const [s, set] = useState<MediaTime>({ t: 0, playing: false });
   useEffect(() => {
-    const h = (e: Event) => set((e as CustomEvent<typeof last>).detail);
+    const h = (e: Event) => set((e as CustomEvent<MediaTime>).detail);
     window.addEventListener(TIME, h);
     return () => window.removeEventListener(TIME, h);
   }, []);

@@ -33,7 +33,12 @@ export default function MySpace({ profile, email, events, materials, attendance,
     }).eq("id", p.id);
     setSaved(error ? "Couldn't save: " + error.message : "Saved");
   }
-  async function signOut() { await supabaseBrowser().auth.signOut(); router.push("/"); router.refresh(); }
+  async function signOut() {
+    await supabaseBrowser().auth.signOut();
+    // the assistant's conversation was answered with this account's access
+    try { for (const k of Object.keys(sessionStorage)) if (k.startsWith("kleros-ask")) sessionStorage.removeItem(k); } catch { /* storage off */ }
+    router.push("/"); router.refresh();
+  }
 
   const picks = events.filter((e) => !isPast(e) && !status[e.id]).map((e) => ({ e, ...scoreEvent(e, p) }))
     .filter((x) => x.score > 0 || !p.interests.length).sort((a, b) => b.score - a.score || a.e.starts_on.localeCompare(b.e.starts_on)).slice(0, 6);
