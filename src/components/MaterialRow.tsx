@@ -5,6 +5,8 @@ import Thumb from "./Thumb";
 import GenCover from "./Cover";
 
 const KIND: Record<string, string> = { talk: "TALK", slides: "PDF", audio: "AUD", video: "VID", doc: "DOC", image: "IMG", link: "URL", social: "POST" };
+// slides kept as a link (Google Slides, a claude.ai deck) are not a PDF
+const badge = (m: Pick<Material, "kind" | "file_path">) => (m.kind === "slides" && !m.file_path ? "DECK" : KIND[m.kind] ?? "FILE");
 
 export function fileUrl(path: string | null | undefined) {
   if (!path) return "";
@@ -97,7 +99,7 @@ export function ArchiveRow({ m, eventSlug }: { m: Material; eventSlug: string })
         : thumb
           // eslint-disable-next-line @next/next/no-img-element
           ? <span className="ico pic"><img src={thumb} alt="" loading="lazy" referrerPolicy="no-referrer" /></span>
-          : <span className={`ico ${m.kind}`} aria-hidden>{isWatchable(m) ? "▶" : KIND[m.kind] ?? "FILE"}</span>}
+          : <span className={`ico ${m.kind}`} aria-hidden>{isWatchable(m) ? "▶" : badge(m)}</span>}
       <div style={{ minWidth: 0 }}>
         <div className="t">{m.title}</div>
         {sub && <div className="s">{sub}</div>}
@@ -119,7 +121,7 @@ export default function MaterialRow({ m, eventTitle, eventSlug }: { m: Material;
       {m.kind === "image" && m.file_path
         // eslint-disable-next-line @next/next/no-img-element
         ? <a className="ico pic" href={fileUrl(m.file_path)} target="_blank" rel="noopener"><img src={fileUrl(m.file_path)} alt="" loading="lazy" /></a>
-        : <div className={`ico ${m.kind}`} aria-hidden>{KIND[m.kind] ?? "FILE"}</div>}
+        : <div className={`ico ${m.kind}`} aria-hidden>{badge(m)}</div>}
       <div style={{ minWidth: 0 }}>
         <div className="t">{m.title}</div>
         {(sub || eventTitle) && (
