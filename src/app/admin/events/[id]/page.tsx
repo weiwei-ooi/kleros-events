@@ -68,7 +68,8 @@ export default async function EditEventPage({ params }: { params: Promise<{ id: 
       <div className="wrap ed-body">
         <section id="details" className="ed-sec">
           <div className="ed-sec-h"><h2>Details</h2><p className="muted small">Title, dates, place, description and the recap shown after the event.</p></div>
-          <EventForm event={e} me={{ isTeam, isAdmin, userId: user.id }} />
+          {/* keyed so a saved change (a new address, a switch) resets the form instead of keeping old values */}
+          <EventForm key={`${e.slug}:${e.updated_at}`} event={e} me={{ isTeam, isAdmin, userId: user.id }} />
         </section>
         {isPrivate && (
           <section id="collaborators" className="ed-sec">

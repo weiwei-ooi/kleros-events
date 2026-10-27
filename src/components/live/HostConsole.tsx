@@ -12,10 +12,12 @@ import { SCREEN_MODES, useScreenMode } from "./useScreenMode";
 
 const LOCKED: RecPhase[] = ["starting", "recording", "stopping", "review", "saving"];
 
-export default function HostConsole({ event, agenda, joinUrl }: {
+export default function HostConsole({ event, agenda, joinUrl, isTeam = true }: {
   event: { id: string; slug: string; title: string; starts_on: string; ends_on: string | null; venue: string | null; city: string | null; status?: "draft" | "published"; visibility?: "public" | "private" };
   agenda: AgendaItem[];
   joinUrl: string;
+  /** false for a private event's collaborators outside the team: no automatic transcript */
+  isTeam?: boolean;
 }) {
   const { questions, loaded, live, error, reload } = useQuestions(event.id);
   const screen = useScreenMode(event.id, reload);
@@ -88,7 +90,7 @@ export default function HostConsole({ event, agenda, joinUrl }: {
           <SessionList eventId={event.id} agenda={agenda} isToday={isToday} activeKey={target?.key ?? null} locked={locked} onPick={setTarget} />
         </div>
         <div className="con-col con-center">
-          <Recorder eventId={event.id} slug={event.slug} eventTitle={event.title} target={target} onPhase={onPhase} onDone={onDone} />
+          <Recorder eventId={event.id} slug={event.slug} eventTitle={event.title} target={target} onPhase={onPhase} onDone={onDone} autoTranscribe={isTeam} />
           <BigScreenCard title={event.title} joinUrl={joinUrl} qr={qr} mode={screen.mode}
             live={screen.live} error={screen.error} questions={questions} fresh={fresh} />
         </div>

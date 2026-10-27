@@ -44,7 +44,8 @@ export default function EventForm({ event, me }: { event?: EventRow; me?: { isTe
       description: s("description"), recap: s("recap"), topics, visibility,
       // a private event is never "published"; made public later, it starts as a draft
       status: (visibility === "private" ? "draft" : s("status") ?? "draft") as "draft" | "published",
-      slug: s("slug") ?? slugify(`${s("title")}-${s("starts_on")?.slice(0, 7)}`), updated_at: new Date().toISOString(),
+      // an emptied slug box keeps the current address when editing (a private event's has a random ending)
+      slug: s("slug") ?? event?.slug ?? slugify(`${s("title")}-${s("starts_on")?.slice(0, 7)}`), updated_at: new Date().toISOString(),
     };
     if (row.ends_on && row.ends_on < row.starts_on) { setErr("The end date is before the start date."); return; }
     const emails = parseEmails(collabs);
@@ -53,6 +54,8 @@ export default function EventForm({ event, me }: { event?: EventRow; me?: { isTe
     const sb = supabaseBrowser();
     const res = event ? await sb.from("events").update(row).eq("id", event.id).select("id").single() : await sb.from("events").insert(row).select("id").single();
     if (res.error) { setBusy(false); setErr(saveError(res.error.message, visibility)); return; }
+    // made public: the collaborator list goes (the database does this too from 0012)
+    if (event?.visibility === "private" && visibility === "public") await sb.from("event_collaborators").delete().eq("event_id", event.id);
     if (!event && visibility === "private" && emails.ok.length) {
       const { error } = await sb.from("event_collaborators").insert(emails.ok.map((email) => ({ event_id: res.data.id, email })));
       if (error) { setBusy(false); setErr(`The event was created, but the collaborators were not added: ${error.message}`); router.push(`/admin/events/${res.data.id}#collaborators`); return; }
@@ -96,7 +99,7 @@ export default function EventForm({ event, me }: { event?: EventRow; me?: { isTe
         <legend className="lbl">Who can see it</legend>
         <label className="vis-opt" data-on={visibility === "public"} aria-disabled={!canMakePublic && visibility !== "public"}>
           <input type="radio" name="visibility" value="public" checked={visibility === "public"} disabled={!canMakePublic && visibility !== "public"} onChange={() => setVisibility("public")} />
-          <span><b>Public</b><span className="muted small">Listed on the site once published. The whole Kleros team can see and edit it.{!canMakePublic && " Only the person who created this event can make it public."}</span></span>
+          <span><b>Public</b><span className="muted small">Listed on the site once published. The whole Kleros team can see and edit it.{!canMakePublic && (isCreator ? " Making an event public needs a Kleros team account." : " Only the person who created this event can make it public.")}</span></span>
         </label>
         <label className="vis-opt" data-on={visibility === "private"} aria-disabled={!canMakePrivate && visibility !== "private"}>
           <input type="radio" name="visibility" value="private" checked={visibility === "private"} disabled={!canMakePrivate && visibility !== "private"} onChange={() => setVisibility("private")} />
@@ -113,7 +116,7 @@ export default function EventForm({ event, me }: { event?: EventRow; me?: { isTe
         <p className="note" style={{ margin: 0 }}>Saving makes this event private: it leaves the public site, and other team members lose access to it, its materials and its questions. {!event.created_by && "You become its creator."}</p>
       )}
       {visibility === "public" && event?.visibility === "private" && (
-        <p className="note" style={{ margin: 0 }}>Saving makes this event public: the whole Kleros team can see and edit it, its materials and its questions. It stays off the public site until its status is set to Published.</p>
+        <p className="note" style={{ margin: 0 }}>Saving makes this event public: the whole Kleros team can see and edit it, its materials and its questions. It stays off the public site until its status is set to Published. The collaborator list is cleared.</p>
       )}
       <div className="two">
         <div className="field"><label htmlFor="starts_on">Starts</label><input id="starts_on" name="starts_on" type="date" required defaultValue={v?.starts_on} /></div>
@@ -139,7 +142,7 @@ export default function EventForm({ event, me }: { event?: EventRow; me?: { isTe
         <div className="chips" style={{ margin: 0 }}>{TOPICS.map((t) => <button type="button" key={t} className="chip" aria-pressed={topics.includes(t)} onClick={() => setTopics(topics.includes(t) ? topics.filter((x) => x !== t) : [...topics, t])}>{t}</button>)}</div></div>
       <div className="field"><label htmlFor="description">Description</label><textarea id="description" name="description" defaultValue={v?.description ?? ""} /></div>
       <div className="field"><label htmlFor="recap">Recap (after the event)</label><textarea id="recap" name="recap" defaultValue={v?.recap ?? ""} placeholder="What happened, who attended, key takeaways" /></div>
-      <div className="field"><label htmlFor="slug">URL slug</label><input id="slug" name="slug" defaultValue={v?.slug ?? ""} placeholder="Generated from the name if empty" /></div>
+      <div className="field"><label htmlFor="slug">URL slug</label><input id="slug" name="slug" defaultValue={v?.slug ?? ""} placeholder={event ? "Keeps the current address if empty" : "Generated from the name if empty"} /></div>
       {err && <div className="note">{err}</div>}
       <div className="row-flex">
         <button className="btn primary" type="submit" disabled={busy}>{busy ? "Saving…" : event ? "Save changes" : "Create event"}</button>
@@ -152,7 +155,7 @@ export default function EventForm({ event, me }: { event?: EventRow; me?: { isTe
 /** Plain-language reasons for the database refusals a save can hit. */
 function saveError(msg: string, visibility: "public" | "private") {
   if (msg.includes("events_slug_key")) return "Another event already uses this URL slug.";
-  if (/Only the person who created this event/.test(msg)) return msg;
+  if (/Only the person who created this event|needs a Kleros team account/.test(msg)) return msg;
   if (/row-level security/i.test(msg)) {
     return visibility === "private"
       ? "This account cannot save this private event."

@@ -55,6 +55,8 @@
 .le-row:hover { background: var(--surface); }
 .le-row.is-on { background: var(--accent-soft); }
 .le-row input { width: 18px; height: 18px; accent-color: var(--accent); margin: 0; }
+.le-row[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; }
+.le-row[aria-disabled="true"]:hover { background: none; }
 .le-main { display: grid; gap: 1px; min-width: 0; }
 .le-main b { font-weight: 600; color: var(--white); font-size: 0.95rem; overflow-wrap: anywhere; line-height: 1.35; }
 .le-empty { padding: 14px 10px; }

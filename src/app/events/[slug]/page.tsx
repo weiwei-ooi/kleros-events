@@ -18,7 +18,8 @@ export const revalidate = 30;
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const data = await getEvent(slug);
-  if (!data) return { title: "Event not found" };
+  // a signed-out visitor gets a sign-in page here rather than a 404, which search engines must not keep
+  if (!data) return { title: "Event not found", robots: { index: false } };
   const e = data.event;
   return { title: e.title, description: `${ROLE_LABEL[e.kleros_role]} · ${fmtRange(e.starts_on, e.ends_on)} · ${place(e)}. ${e.description ?? ""}`.slice(0, 200) };
 }
@@ -26,7 +27,22 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 export default async function EventPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const [data, counts, { user, profile }] = await Promise.all([getEvent(slug), eventCounts(), currentUser()]);
-  if (!data) notFound();
+  if (!data) {
+    // a private event is only readable once signed in with an invited email; the same page shows for
+    // every unknown address, so it says nothing about whether this one exists
+    if (!user) return (
+      <div className="wrap page con-gate">
+        <div className="eyebrow">Event</div>
+        <h1>Sign in to open this event</h1>
+        <p className="muted">This event was not found. If it is a private event that was shared with you, sign in with the email address it was shared with.</p>
+        <div className="row-flex">
+          <Link className="btn primary" href={`/login?next=${encodeURIComponent(`/events/${slug}`)}`}>Sign in</Link>
+          <Link className="btn" href="/events">All events</Link>
+        </div>
+      </div>
+    );
+    notFound();
+  }
   const { event: e, agenda, team, materials } = data;
   const past = isPast(e);
   const isTeam = !!profile?.is_team;
@@ -124,10 +140,10 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                   <StudioButton mode="record" className="btn sm primary"><span className="dot" aria-hidden /> Record a session</StudioButton>
                   <StudioButton mode="files" className="btn sm">Add files or links</StudioButton>
                   {bareRecordings.length > 0 && <StudioButton mode="slides" className="btn sm">Attach slides to a recording</StudioButton>}
-                  <Link className="btn sm ghost" href="/admin/recordings">Recordings library</Link>
+                  {isTeam && <Link className="btn sm ghost" href="/admin/recordings">Recordings library</Link>}
                 </div>
               )}
-              {canEdit && <EventStudio event={{ id: e.id, slug: e.slug, title: e.title }} agenda={agenda} recordings={bareRecordings} />}
+              {canEdit && <EventStudio event={{ id: e.id, slug: e.slug, title: e.title }} agenda={agenda} recordings={bareRecordings} isTeam={isTeam} />}
               {talks.length > 0
                 ? <div className="grid two-up">{talks.map((m) => <TalkCard key={m.id} m={m} event={e} />)}</div>
                 : <p className="quiet-empty">No talks yet. Record a session here, or add a recording or video link.</p>}

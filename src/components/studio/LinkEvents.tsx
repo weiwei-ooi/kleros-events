@@ -25,12 +25,22 @@ export default function LinkEvents({ materialId, title, linked, onChange, label 
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
+  // 0010: a private event only takes items that are on private events alone (all editable by the caller)
+  const [privOk, setPrivOk] = useState<boolean | null>(null);
 
   useEffect(() => { if (preloaded) setEvents(preloaded); }, [preloaded]);
+
+  // until the answer is in, private events that are not picked yet stay locked
+  function checkPrivOk() {
+    setPrivOk(null);
+    supabaseBrowser().rpc("material_private_only", { p_material: materialId })
+      .then(({ data, error }) => setPrivOk(error ? null : !!data));
+  }
 
   async function open() {
     setPicked(linked); setQ(""); setErr(""); setCreating(false);
     dlg.current?.showModal();
+    checkPrivOk();
     if (!events) {
       try { setEvents(await loadPickEvents()); } catch (e) { setErr(`The events could not be loaded: ${(e as Error).message}`); }
     }
@@ -49,13 +59,23 @@ export default function LinkEvents({ materialId, title, linked, onChange, label 
     setErr(""); setBusy("Saving…");
     const add = picked.filter((id) => !linked.includes(id));
     const drop = linked.filter((id) => !picked.includes(id));
+    // one event at a time, private ones first: a public link would stop the item from going into a
+    // private event, and a refused private pick must not cost the public ones
+    const isPrivate = (id: string) => (events ?? []).find((e) => e.id === id)?.visibility === "private";
+    // what is saved so far, so a refusal halfway still shows the links that were made
+    let now = [...linked];
+    const report = () => onChange?.(now, (events ?? []).filter((e) => now.includes(e.id)));
     try {
-      await linkMaterial(materialId, add);
-      for (const id of drop) await unlinkMaterial(materialId, id);
-      onChange?.(picked, (events ?? []).filter((e) => picked.includes(e.id)));
+      for (const id of [...add].sort((a, b) => Number(isPrivate(b)) - Number(isPrivate(a)))) { await linkMaterial(materialId, [id]); now = [...now, id]; }
+      for (const id of drop) { await unlinkMaterial(materialId, id); now = now.filter((x) => x !== id); }
+      report();
       close();
       router.refresh();
-    } catch (e) { setErr((e as Error).message); }
+    } catch (e) {
+      setErr((e as Error).message);
+      if (now.length !== linked.length || now.some((id) => !linked.includes(id))) { report(); router.refresh(); }
+      checkPrivOk();
+    }
     setBusy("");
   }
 
@@ -127,10 +147,12 @@ export default function LinkEvents({ materialId, title, linked, onChange, label 
                 {events && !shown.length && <li className="muted small le-empty">No event matches. Try another word, or create a new event.</li>}
                 {shown.map((e) => {
                   const on = picked.includes(e.id);
+                  const locked = !on && e.visibility === "private" && privOk !== true && !linked.includes(e.id);
                   return (
                     <li key={e.id}>
-                      <label className={`le-row${on ? " is-on" : ""}`}>
-                        <input type="checkbox" checked={on} onChange={() => toggle(e.id)} />
+                      <label className={`le-row${on ? " is-on" : ""}`} aria-disabled={locked || undefined}
+                        title={locked ? "Only items that belong to private events can go into a private event. Add it there as a new link or upload instead." : undefined}>
+                        <input type="checkbox" checked={on} disabled={locked} onChange={() => toggle(e.id)} />
                         <span className="le-main">
                           <b>{e.title}</b>
                           <span className="muted small">{fmtRange(e.starts_on, e.ends_on)} · {place(e)} · {e.event_type}</span>
@@ -141,6 +163,9 @@ export default function LinkEvents({ materialId, title, linked, onChange, label 
                   );
                 })}
               </ul>
+              {privOk === false && shown.some((e) => e.visibility === "private" && !linked.includes(e.id)) && (
+                <p className="muted small">Private events only take items that belong to private events. To show this one in a private event, add it there as a new link or upload.</p>
+              )}
             </>
           )}
 

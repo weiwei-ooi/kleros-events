@@ -15,7 +15,8 @@ import { MediaPlayer, YouTubePlayer } from "@/components/transcript/MediaPlayers
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const [m, t] = await Promise.all([getMaterial(id), getTranscript(id)]);
-  if (!m) return { title: "Talk not found" };
+  // a signed-out visitor gets a sign-in page here rather than a 404, which search engines must not keep
+  if (!m) return { title: "Talk not found", robots: { index: false } };
   const fallback = `${m.speaker ? m.speaker + (m.events ? " at " : "") : ""}${m.events?.title ?? ""}. ${m.kind === "audio" ? "Recording" : "Slides and recording"}.`.replace(/^\. /, "");
   return { title: m.title, description: t?.summary?.tldr?.slice(0, 300) || fallback };
 }
@@ -23,6 +24,17 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function TalkPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const [m, { user, profile }, transcript] = await Promise.all([getMaterial(id), currentUser(), getTranscript(id)]);
+  if (!m && !user) return (
+    <div className="wrap page con-gate">
+      <div className="eyebrow">Talk</div>
+      <h1>Sign in to open this talk</h1>
+      <p className="muted">This talk was not found. If it belongs to a private event that was shared with you, sign in with the email address it was shared with.</p>
+      <div className="row-flex">
+        <Link className="btn primary" href={`/login?next=${encodeURIComponent(`/talks/${id}`)}`}>Sign in</Link>
+        <Link className="btn" href="/events">All events</Link>
+      </div>
+    </div>
+  );
   if (!m || !(m.kind === "talk" || m.kind === "slides" || m.kind === "video" || (m.kind === "audio" && m.file_path))) notFound();
   const pdf = fileUrl(m.kind === "talk" ? m.pdf_path : m.file_path);
   const drive = driveId(m.url);

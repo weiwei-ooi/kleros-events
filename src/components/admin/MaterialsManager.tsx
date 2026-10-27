@@ -10,7 +10,7 @@ import TalkBuilder from "./TalkBuilder";
 // kept for older imports
 export { uploadToStorage };
 
-/** Linked to events other than this one, so removing it here only unlinks it. */
+/** Linked to other events this editor can see: the button then says Unlink (the database also counts events they cannot see). */
 const sharedWith = (m: Material, eventId: string) => (m.event_ids ?? []).filter((id) => id !== eventId).length;
 
 export default function MaterialsManager({ event, initial }: { event: EventRow; initial: Material[] }) {
@@ -22,15 +22,25 @@ export default function MaterialsManager({ event, initial }: { event: EventRow; 
   async function remove(m: Material) {
     if (confirm !== m.id) { setConfirm(m.id); return; }
     setErr("");
-    if (sharedWith(m, event.id)) {
-      try { await unlinkMaterial(m.id, event.id); } catch (e) { setErr((e as Error).message); return; }
-    } else {
-      const sb = supabaseBrowser();
-      // files first: storage lets whoever may edit the item remove its files only while the item exists
-      const paths = [m.file_path, m.pdf_path, m.audio_path].filter((x): x is string => !!x && !/^https?:\/\//.test(x));
-      if (paths.length) await sb.storage.from("materials").remove(paths);
-      const { error } = await sb.from("materials").delete().eq("id", m.id);
-      if (error) { setErr(error.message); return; }
+    const sb = supabaseBrowser();
+    // The database decides (0012): it takes the item off this event when it is on other events too,
+    // including ones this editor cannot see, and deletes it when this was its last event. Files go
+    // after the row, once nothing uses them.
+    const { data: paths, error } = await sb.rpc("remove_material_from_event", { p_material: m.id, p_event: event.id });
+    if (error && /remove_material_from_event|schema cache|does not exist/i.test(error.message)) {
+      // database not updated to 0012 yet
+      if (sharedWith(m, event.id)) {
+        try { await unlinkMaterial(m.id, event.id); } catch (e) { setErr((e as Error).message); return; }
+      } else {
+        const files = [m.file_path, m.pdf_path, m.audio_path].filter((x): x is string => !!x && !/^https?:\/\//.test(x));
+        if (files.length) await sb.storage.from("materials").remove(files);
+        const { error: delErr } = await sb.from("materials").delete().eq("id", m.id);
+        if (delErr) { setErr(delErr.message); return; }
+      }
+    } else if (error) { setErr(error.message); return; }
+    else {
+      const files = ((paths ?? []) as string[]).filter((x) => !/^https?:\/\//.test(x));
+      if (files.length) await sb.storage.from("materials").remove(files);
     }
     setList(list.filter((x) => x.id !== m.id));
   }

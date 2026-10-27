@@ -17,7 +17,7 @@ export default async function RecordingsPage() {
   const [mats, links, evs, tx] = await Promise.all([
     sb.from("materials").select("*").in("kind", ["talk", "audio", "video"]).order("created_at", { ascending: false }),
     listLinks(sb),
-    sb.from("events").select("id, slug, title, starts_on, ends_on, city, country, status, event_type").order("starts_on", { ascending: false }),
+    sb.from("events").select("id, slug, title, starts_on, ends_on, city, country, status, visibility, event_type").order("starts_on", { ascending: false }),
     sb.from("transcripts").select("material_id, status"),
   ]);
   const materials = withEventIds((mats.data ?? []) as Material[], links);

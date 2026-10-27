@@ -60,7 +60,7 @@ export default function RecordingsLibrary({ materials, events, txStatus, linksRe
       <header className="adm-head">
         <div>
           <h1>Recordings</h1>
-          <p className="muted">Every talk, recording and video, with the events it belongs to. A recording can be linked to several events; one with no published event is visible to the team only.</p>
+          <p className="muted">Every talk, recording and video, with the events it belongs to. A recording can be linked to several events. One with no published event is visible to the team only, and one that belongs only to private events is visible only to their creators and collaborators.</p>
         </div>
         <Link className="btn primary" href="/record"><span className="dot" aria-hidden /> Record new</Link>
       </header>

@@ -27,6 +27,7 @@ export interface EventRow {
   visibility: "public" | "private";
   created_by: string | null;
   is_example: boolean;
+  updated_at?: string;
 }
 
 export interface TeamMember {

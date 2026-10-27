@@ -68,8 +68,10 @@ function tidy(marks: SlideMark[]): SlideMark[] {
  * it is saved on its own and can be linked to events afterwards (savedExtra renders the
  * controls for that under "Saved").
  */
-export default function Recorder({ eventId, slug, eventTitle, target, onPhase, onDone, onSaved, savedExtra }: {
+export default function Recorder({ eventId, slug, eventTitle, target, onPhase, onDone, onSaved, savedExtra, autoTranscribe = true }: {
   eventId: string | null; slug?: string; eventTitle?: string; target: RecTarget | null;
+  /** Start the transcript after saving (team accounts only: transcripts use paid services). */
+  autoTranscribe?: boolean;
   onPhase?: (p: RecPhase, title?: string) => void; onDone?: () => void;
   onSaved?: (id: string, kind: "talk" | "audio") => void;
   savedExtra?: (id: string, title: string) => React.ReactNode;
@@ -476,7 +478,7 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
       const id = (data as { id: string }).id;
       setSaved({ id, kind: withSlides ? "talk" : "audio" });
       setPhase("saved");
-      transcribe(id);
+      if (autoTranscribe) transcribe(id);
       onSaved?.(id, withSlides ? "talk" : "audio");
     } catch (e) {
       const raw = (e as Error).message || "unknown error";
@@ -712,6 +714,7 @@ export default function Recorder({ eventId, slug, eventTitle, target, onPhase, o
             {saved.kind === "talk" ? "It plays with the slides in sync on the talk page." : eventId ? "It is listed with the event's recordings." : "Link it to one or more events so it shows on their pages."}
           </div>
           {tx && <TxLine s={tx} href={`/talks/${saved.id}`} />}
+          {!autoTranscribe && <div className="rec-tx" role="status">Transcripts are made by Kleros team accounts. A team member can make one from the talk page.</div>}
           {savedExtra?.(saved.id, title.trim() || (eventTitle ? `${eventTitle} recording` : "Untitled recording"))}
           <div className="row-flex">
             <a className="btn" href={`/talks/${saved.id}`} target="_blank" rel="noopener">Open the talk ↗</a>

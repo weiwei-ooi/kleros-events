@@ -21,10 +21,12 @@ const free = (): RecTarget => ({ key: `free-${Date.now()}`, agendaId: null, titl
  * until a StudioButton (or #record in the address) opens it. Once opened it stays mounted and
  * is only hidden, so closing it or switching tabs never stops a recording.
  */
-export default function EventStudio({ event, agenda, recordings }: {
+export default function EventStudio({ event, agenda, recordings, isTeam = true }: {
   event: { id: string; slug: string; title: string };
   agenda: AgendaItem[];
   recordings: Material[];
+  /** false for a private event's collaborators outside the team: no automatic transcript */
+  isTeam?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -68,7 +70,7 @@ export default function EventStudio({ event, agenda, recordings }: {
     <section ref={box} className="studio" hidden={!open} aria-label="Team tools for this event">
       <div className="studio-h">
         <div className="studio-t">
-          <span className="eyebrow">Team only</span>
+          <span className="eyebrow">{isTeam ? "Team only" : "Event tools"}</span>
           <div className="seg studio-tabs" role="tablist" aria-label="Tool">
             {TABS.map((t) => (
               <button key={t.id} role="tab" aria-selected={tab === t.id} aria-pressed={tab === t.id} onClick={() => { setTab(t.id); setMsg(""); }}>{t.label}</button>
@@ -88,9 +90,9 @@ export default function EventStudio({ event, agenda, recordings }: {
               {agenda.map((a) => <option key={a.id} value={a.id}>{a.starts_at ? `${a.starts_at.slice(0, 5)} · ` : ""}{a.title}{a.speaker ? `, ${a.speaker}` : ""}</option>)}
             </select>
           </div>
-          <p className="muted small">The saved recording is listed in Talks below and gets a transcript automatically. For a full live setup with questions and the big screen, use Run this event.</p>
+          <p className="muted small">The saved recording is listed in Talks below{isTeam ? " and gets a transcript automatically" : ""}. For a full live setup with questions and the big screen, use Run this event.</p>
         </div>
-        <Recorder eventId={event.id} slug={event.slug} eventTitle={event.title} target={target} onPhase={onPhase} onDone={onDone} onSaved={onSaved} />
+        <Recorder eventId={event.id} slug={event.slug} eventTitle={event.title} target={target} onPhase={onPhase} onDone={onDone} onSaved={onSaved} autoTranscribe={isTeam} />
       </div>
 
       <div hidden={tab !== "files"} className="studio-pane">
