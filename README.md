@@ -20,7 +20,7 @@ The public record of every event Kleros hosts or takes part in (conferences, sid
 
 ## Stack
 
-Next.js 15 (App Router) · Supabase (Postgres, auth, storage, realtime) · pdf.js · deploys to Vercel.
+Next.js 15 (App Router) · Supabase (Postgres, auth, storage, realtime) · pdf.js · deploys to Vercel or Netlify.
 
 ## Setup
 
@@ -44,9 +44,12 @@ Open an event while signed in with a Kleros account and press **Event mode** (or
 - **Stop**, name the recording and press **Save to event**. It uploads to the event page as an audio file. **Download copy** keeps a local backup.
 - Hover a question to show it big, mark it answered or hide it.
 
-## Deploy (Vercel)
+## Deploy
 
-Import the repo in Vercel, add the three env vars, and deploy. Point a domain such as `events.kleros.io` at it, then update `NEXT_PUBLIC_SITE_URL` and the Supabase redirect URLs.
+- **Vercel:** import the repo, add the env vars from `.env.example`, and deploy.
+- **Netlify:** import the repo; `netlify.toml` holds the build settings. Steps, env vars, domain and sign-in notes are in [docs/deploy-netlify.md](docs/deploy-netlify.md).
+
+Then point `events.kleros.io` at the host and make sure the Supabase redirect URLs include it.
 
 ## Notes
 

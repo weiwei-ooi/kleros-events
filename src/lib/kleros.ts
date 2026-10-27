@@ -1,7 +1,9 @@
 import type { KlerosRole } from "./types";
 
+/** Address used in share links, QR codes and calendar files: set explicitly, else the host's own. */
 export const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ??
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  process.env.NETLIFY_SITE_URL ||
   (process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL
     ? `https://${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}`
     : "http://localhost:3000");

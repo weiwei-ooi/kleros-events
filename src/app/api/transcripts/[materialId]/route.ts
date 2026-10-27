@@ -10,10 +10,13 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 // Transcribing a two-hour recording on Groq takes well under a minute; the summary another
 // minute or two. If the transcript step runs long, the summary is left for a second call.
+// Vercel honours maxDuration; Netlify stops every request at 60 seconds, so there the summary
+// always gets a call of its own (HOSTING is set at build time in next.config.ts).
 export const maxDuration = 300;
 
-const SUMMARY_BUDGET_MS = 150_000;   // start the summary in the same call only before this
-const STALE_MS = 6 * 60_000;          // a run older than this is assumed dead (function timed out)
+const ON_NETLIFY = process.env.HOSTING === "netlify";
+const SUMMARY_BUDGET_MS = ON_NETLIFY ? 0 : 150_000;   // start the summary in the same call only before this
+const STALE_MS = (ON_NETLIFY ? 2 : 6) * 60_000;       // a run older than this is assumed dead (function timed out)
 
 type Step = "auto" | "transcript" | "summary" | "import";
 
@@ -88,6 +91,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ materia
         status: keys.summary ? "summarising" : "done", started_at: new Date().toISOString(),
       });
       if (!keys.summary) return json({ status: "done", error: "Transcript saved. Summaries are not set up yet (add ANTHROPIC_API_KEY)." });
+      if (ON_NETLIFY) return json({ status: "summarising", more: true });
       const s = await summarise(info, segs);
       await save({ summary: s.summary, provider: `${provider} + ${s.provider}`, status: "done", error: null });
       return json({ status: "done" });
