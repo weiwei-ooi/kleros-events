@@ -34,9 +34,12 @@ export async function unlinkMaterial(materialId: string, eventId: string) {
 }
 
 function linkError(msg: string) {
-  return /material_events/.test(msg) && /does not exist|schema cache/i.test(msg)
-    ? "Linking to several events needs the database update in supabase/migrations/0006_material_links.sql."
-    : msg;
+  if (/material_events/.test(msg) && /does not exist|schema cache/i.test(msg))
+    return "Linking to several events needs the database update in supabase/migrations/0006_material_links.sql.";
+  // 0010: a private event only takes items that already belong to private events alone
+  if (/row-level security/i.test(msg) && /material_events/.test(msg))
+    return "This item can't be added to that event. Items from the recordings library or from a public event stay with the team: to show one in a private event, add it there as a new link or upload.";
+  return msg;
 }
 
 /** The fields the event pickers show. */
