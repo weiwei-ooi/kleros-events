@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import type { Material } from "@/lib/types";
+import { fileUrl } from "../MaterialRow";
 
 type Rec = Pick<Material, "id" | "kind" | "url" | "pdf_path" | "audio_path" | "file_path" | "pages">;
 
@@ -47,8 +48,11 @@ export default function RecordingSlides({ m, canEdit }: { m: Rec; canEdit: boole
     setArmed(false); setErr(""); setMsg(""); setBusy("Removing the PDF…");
     const sb = supabaseBrowser();
     const old = m.pdf_path;
+    // the size shown becomes the audio's alone
+    const head = m.audio_path ? await fetch(fileUrl(m.audio_path), { method: "HEAD" }).catch(() => null) : null;
+    const size = Number(head?.ok && head.headers.get("content-length")) || undefined;
     const { error } = await sb.from("materials")
-      .update({ kind: "audio", file_path: m.audio_path, audio_path: null, pdf_path: null, pages: null, marks: [] })
+      .update({ kind: "audio", file_path: m.audio_path, audio_path: null, pdf_path: null, pages: null, marks: [], ...(size ? { size_bytes: size } : {}) })
       .eq("id", m.id).select("id").single();
     if (error) { setBusy(""); setErr(`Nothing changed: ${error.message}`); return; }
     // the file goes too, unless another item uses it
