@@ -10,6 +10,25 @@
       "title": "Federico Ast's recap with photos (Spanish)",
       "speaker": "Federico Ast",
       "url": "https://x.com/federicoast/status/2113020717965123759"
+    },
+    {
+      "id": "2026-10-27-yt-PLN-I9T8pYvjQ",
+      "kind": "material",
+      "source": "https://www.youtube.com/playlist?list=PLN-I9T8pYvjQ",
+      "event_slug": "who-judges-the-machines-buenos-aires-2026",
+      "material_kind": "link",
+      "title": "YouTube playlist: keynote, both panels and the full event (ES)",
+      "url": "https://www.youtube.com/playlist?list=PLN-I9T8pYvjQ"
+    },
+    {
+      "id": "2026-10-27-web-merge-madrid-agent-commerce",
+      "kind": "material",
+      "source": "https://www.mmerge.io/events/ai-x-blockchain-track-by-qvac-agent-commerce-the-new-generation-of-payments",
+      "event_slug": "merge-madrid-2026",
+      "material_kind": "link",
+      "title": "Agent Commerce: The New Generation of Payments (MERGE programme)",
+      "speaker": "Facundo Trotz",
+      "url": "https://www.mmerge.io/events/ai-x-blockchain-track-by-qvac-agent-commerce-the-new-generation-of-payments"
     }
   ]
 }
