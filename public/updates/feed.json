@@ -1,4 +1,15 @@
 {
   "about": "Updates for kleros-events.vercel.app found on Kleros socials and team channels. Format: docs/social-feed.md. Applied hourly by sync_feed() in Supabase.",
-  "items": []
+  "items": [
+    {
+      "id": "2026-10-27-x-2113020717965123759",
+      "kind": "material",
+      "source": "https://x.com/federicoast/status/2113020717965123759",
+      "event_slug": "who-judges-the-machines-buenos-aires-2026",
+      "material_kind": "social",
+      "title": "Federico Ast's recap with photos (Spanish)",
+      "speaker": "Federico Ast",
+      "url": "https://x.com/federicoast/status/2113020717965123759"
+    }
+  ]
 }

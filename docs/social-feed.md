@@ -16,6 +16,7 @@ Each day the check:
 
 1. Reads what is already on the site: `supabase/content/2026-10-event-history.sql` (the event list and slugs) and the items already in `public/updates/feed.json`.
 2. Looks for anything from the last 10 days:
+   - X first through Grok: Claude in Chrome opens https://x.com/i/grok in Wei Wei's signed-in browser and asks it to list every event, recording, slide deck and photo post from the accounts below, each with the URL of its post. Each post Grok names is then opened and read before it is used, because Grok's summaries can be wrong. If Chrome is not connected, WebSearch is the fallback;
    - posts from @Kleros_io on X, and from the team: @federicoast, @clesaege, @williamhwgeorge, @JayBuidl, @fortuvp, @alex__eth, @nachikeighth;
    - the Kleros LinkedIn page;
    - new uploads on the Kleros YouTube channel (`UCEjwygFVVrSXhPNEKfweypA`);
