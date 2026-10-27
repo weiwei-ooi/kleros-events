@@ -7,10 +7,13 @@ import { emitTime, onSeek } from "@/lib/transcript/client";
 export function MediaPlayer({ src, kind, title }: { src: string; kind: "audio" | "video"; title: string }) {
   const el = useRef<HTMLMediaElement | null>(null);
   const fixing = useRef<(() => void) | null>(null);
+  // the moment a transcript line asked for, which the fix goes back to if the jump came before it
+  const sought = useRef<number | null>(null);
   // WebM from MediaRecorder has no duration until the browser has seen its end once
   const fixDuration = (m: HTMLMediaElement) => {
     if (fixing.current || isFinite(m.duration)) return;
-    const fix = () => { if (!isFinite(m.duration)) return; endFix(m); m.currentTime = 0; };
+    const at = m.currentTime;
+    const fix = () => { if (!isFinite(m.duration)) return; endFix(m); m.currentTime = sought.current ?? at; };
     fixing.current = fix;
     m.addEventListener("durationchange", fix);
     m.currentTime = 1e101;
@@ -19,11 +22,13 @@ export function MediaPlayer({ src, kind, title }: { src: string; kind: "audio" |
     if (fixing.current) m.removeEventListener("durationchange", fixing.current);
     fixing.current = null;
   };
-  // a server-rendered element can load its metadata before React listens for it
-  useEffect(() => { const m = el.current; if (m && m.readyState >= HTMLMediaElement.HAVE_METADATA) fixDuration(m); }, []);
+  // a server-rendered element can load its metadata before React listens for it; one already
+  // playing (started before the page's script loaded) is left alone
+  useEffect(() => { const m = el.current; if (m && m.readyState >= HTMLMediaElement.HAVE_METADATA && m.paused) fixDuration(m); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => onSeek((t) => {
     const m = el.current; if (!m) return false;
     // a jump asked for now wins over the duration fix still running
+    sought.current = t;
     endFix(m);
     m.currentTime = t;
     m.play().catch(() => {});

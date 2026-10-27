@@ -1,6 +1,6 @@
 // The site assistant: Claude with read-only lookup tools, streamed back as small events.
 import Anthropic from "@anthropic-ai/sdk";
-import { STATUS, TOOLS, runTool, type Source, type ToolContext } from "./tools";
+import { STATUS, TOOLS, cutAt, runTool, type Source, type ToolContext } from "./tools";
 
 export type AskEvent =
   | { t: "status"; text: string }
@@ -236,7 +236,7 @@ export async function runAsk(opts: {
       const res = await runTool(ctx, u.name, u.input);
       // lookups finish one at a time, so this holds the read limit exactly
       const room = Math.max(0, MAX_READ_CHARS - readChars);
-      const text = res.content.length > room ? res.content.slice(0, room) + "…(cut off: the read limit for this question is reached)" : res.content;
+      const text = res.content.length > room ? cutAt(res.content, room) + "…(cut off: the read limit for this question is reached)" : res.content;
       readChars += text.length;
       return { type: "tool_result" as const, tool_use_id: u.id, content: text, ...(res.isError ? { is_error: true } : {}) };
     }));

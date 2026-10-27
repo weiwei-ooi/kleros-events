@@ -78,10 +78,13 @@ language sql stable security invoker set search_path = public as $$
     from (select th.material_id, count(*) over (partition by th.x) as n from th) d
     group by d.material_id
   ),
+  top as (   -- the best 12 and any tied with the 12th (at most 24), so the line count breaks ties
+    select x.* from (select w.* from w order by round(1000 * w.wt) desc fetch first 12 rows with ties) x
+    order by x.wt desc limit 24
+  ),
   hit as (
-    select tr.material_id, tr.summary->>'tldr' as tldr, tr.segments, w.wt
-    from transcripts tr join w on w.material_id = tr.material_id
-    order by w.wt desc limit 12
+    select tr.material_id, tr.summary->>'tldr' as tldr, tr.segments, top.wt
+    from transcripts tr join top on top.material_id = tr.material_id
   ),
   m as (     -- one row per line and term it contains, numbered per term in time order
     select h.material_id, s.ord, s.v, x,

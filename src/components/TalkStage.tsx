@@ -38,9 +38,12 @@ export default function TalkStage({ pdf, mode, audioUrl, marks, notes, onNotes, 
   const box = useRef<HTMLDivElement>(null);
   const rec = useRef<{ mr: MediaRecorder; stream: MediaStream; t0: number; chunks: Blob[] } | null>(null);
   const renderSeq = useRef(0);
-  // the WebM duration fix in progress (its durationchange listener), and whether the page asked for a moment
+  // the WebM duration fix in progress (its durationchange listener), and the moment the page asked for
   const fixing = useRef<(() => void) | null>(null);
-  const sought = useRef(false);
+  const sought = useRef<number | null>(null);
+  // the fix ends after a render or two: it reads the resume point as it is then
+  const startRef = useRef(startAt);
+  startRef.current = startAt;
   const endFix = (a: HTMLMediaElement) => {
     if (fixing.current) a.removeEventListener("durationchange", fixing.current);
     fixing.current = null;
@@ -52,7 +55,7 @@ export default function TalkStage({ pdf, mode, audioUrl, marks, notes, onNotes, 
     const fix = () => {
       if (!isFinite(a.duration)) return;
       endFix(a);
-      setDur(a.duration); a.currentTime = sought.current ? a.currentTime : startAt || 0;
+      setDur(a.duration); a.currentTime = sought.current ?? (startRef.current || 0);
     };
     fixing.current = fix;
     a.addEventListener("durationchange", fix);
@@ -82,7 +85,7 @@ export default function TalkStage({ pdf, mode, audioUrl, marks, notes, onNotes, 
   useEffect(() => { draw(page); }, [page, draw]);
   useEffect(() => { const r = () => draw(page); window.addEventListener("resize", r); return () => window.removeEventListener("resize", r); }, [page, draw]);
   useEffect(() => () => { rec.current?.stream.getTracks().forEach((t) => t.stop()); }, []);
-  useEffect(() => { if (audio.current && startAt && !sought.current && !fixing.current) audio.current.currentTime = startAt; }, [startAt, audioUrl]);
+  useEffect(() => { if (audio.current && startAt && sought.current === null && !fixing.current) audio.current.currentTime = startAt; }, [startAt, audioUrl]);
   // a server-rendered element can load its metadata before React listens for it
   useEffect(() => { const a = audio.current; if (a && a.readyState >= HTMLMediaElement.HAVE_METADATA) onMeta(a); }, [audioUrl]); // eslint-disable-line react-hooks/exhaustive-deps
   // transcript lines and chapters on the talk page ask the player to jump (play and review only)
@@ -90,7 +93,7 @@ export default function TalkStage({ pdf, mode, audioUrl, marks, notes, onNotes, 
     if (mode !== "play" && mode !== "review") return;
     return onSeek((t) => {
       const a = audio.current; if (!a) return false;
-      sought.current = true;
+      sought.current = t;
       endFix(a);
       a.currentTime = t; a.play().catch(() => {});
     });

@@ -62,6 +62,12 @@ export const TOOLS: Anthropic.Beta.BetaTool[] = [
 
 const str = (v: unknown) => (typeof v === "string" ? v : "");
 const trimTo = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
+/** slice without splitting a surrogate pair (a lone half of an emoji makes the API reject the request) */
+export const cutAt = (s: string, n: number) => {
+  let i = Math.max(0, Math.min(n, s.length));
+  if (i > 0 && i < s.length && /[\uD800-\uDBFF]/.test(s[i - 1])) i--;
+  return s.slice(0, i);
+};
 
 function placeOf(e: { venue?: string | null; city?: string | null; country?: string | null; region?: string | null }) {
   return [e.venue, e.city, e.country].filter(Boolean).join(", ") || (e.region === "Online" ? "Online" : e.region ?? "");
@@ -235,11 +241,11 @@ async function search(ctx: ToolContext, input: { query: string }) {
     .map(({ m }) => ({ material_id: m.id, kind: m.kind, title: m.title, speaker: m.speaker, page: pageOf(m), link: m.url && /^https?:\/\//.test(m.url) ? m.url : null, event: m.events?.title ?? null, event_slug: m.events?.slug ?? null }));
 
   // transcript lines that match, with their times; the material rows say which talk they are
-  const txMeta = txRows.length
+  const txMeta = txRows?.length
     ? (((await ctx.sb.from("materials").select("id, title, speaker, kind, file_path, events!materials_event_id_fkey(slug, title)").in("id", txRows.map((t) => t.material_id))).data ?? []) as unknown as { id: string; title: string; speaker: string | null; kind: string; file_path: string | null; events: { slug: string; title: string } | null }[])
     : [];
   const metaBy = Object.fromEntries(txMeta.map((m) => [m.id, m]));
-  const transcripts = txRows.filter((t) => metaBy[t.material_id]).map((t) => {
+  const transcripts = (txRows ?? []).filter((t) => metaBy[t.material_id]).map((t) => {
     const m = metaBy[t.material_id];
     return {
       material_id: t.material_id, title: m.title, speaker: m.speaker, event: m.events?.title ?? null, event_slug: m.events?.slug ?? null,
@@ -249,7 +255,12 @@ async function search(ctx: ToolContext, input: { query: string }) {
     };
   }).sort((a, b) => b.score - a.score).slice(0, 8).map(({ score: _score, ...rest }) => rest);
 
-  return { terms, events, agenda, materials, transcripts };
+  // a part that could not be searched must not read as "nothing found"
+  const failed = [ev.error && "events", ag.error && "agenda", mat.error && "materials", !txRows && "transcripts"].filter(Boolean);
+  const not_searched = failed.length
+    ? `The search could not check ${failed.join(", ")} this time. Do not say the site has nothing on this; say that part could not be searched, or look in a likely event or recording directly.`
+    : undefined;
+  return { terms, events, agenda, materials, transcripts, not_searched };
 }
 
 type TxHit = { material_id: string; tldr: string | null; score: number; lines: { start: number; text: string }[] };
@@ -259,20 +270,24 @@ type TxHit = { material_id: string; tldr: string | null; score: number; lines: {
  * matching (ask_search_transcripts, migration 0013) so only those lines travel; until that is
  * set up, the rows come back whole and are matched here.
  */
-async function searchTranscripts(ctx: ToolContext, terms: string[]): Promise<TxHit[]> {
+async function searchTranscripts(ctx: ToolContext, terms: string[]): Promise<TxHit[] | null> {
   const rpc = await ctx.sb.rpc("ask_search_transcripts", { p_terms: terms });
   if (!rpc.error) return ((rpc.data ?? []) as TxHit[]).map((t) => ({ ...t, lines: (t.lines ?? []).filter((l) => typeof l.start === "number" && typeof l.text === "string") }));
   // only a missing function means "not set up yet"; after a timeout or other failure, downloading
-  // whole transcripts would cost more than the search is worth
-  if (rpc.error.code !== "PGRST202" && rpc.error.code !== "42883") return [];
+  // whole transcripts would cost more than the search is worth (null: not searched)
+  if (rpc.error.code !== "PGRST202" && rpc.error.code !== "42883") return null;
 
   // rank by the terms each transcript contains (rarer terms count more), then fetch the best few
   const found = await Promise.all(terms.map((t) => ctx.sb.from("transcripts").select("material_id").ilike("text", `%${t}%`).limit(500)));
+  if (found.some((r) => r.error)) return null;
   const weight = new Map<string, number>();
   found.forEach((r) => { const ids = (r.data ?? []) as { material_id: string }[]; for (const { material_id } of ids) weight.set(material_id, (weight.get(material_id) ?? 0) + 1 / ids.length); });
-  const top = [...weight].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([id]) => id);
+  // the best 12 and any tied with the 12th (at most 24), so the number of matching lines breaks ties
+  const ranked = [...weight].map(([id, w]) => [id, Math.round(1000 * w)] as const).sort((a, b) => b[1] - a[1]);
+  const top = ranked.filter(([, w], i) => i < 12 || (ranked.length > 11 && w === ranked[11][1])).slice(0, 24).map(([id]) => id);
   if (!top.length) return [];
-  const { data } = await ctx.sb.from("transcripts").select("material_id, segments, tldr:summary->>tldr").in("material_id", top);
+  const { data, error } = await ctx.sb.from("transcripts").select("material_id, segments, tldr:summary->>tldr").in("material_id", top);
+  if (error) return null;
   const rows = (data ?? []) as unknown as { material_id: string; segments: Segment[] | null; tldr: string | null }[];
   return rows.map((t) => {
     const lines = (t.segments ?? []).map((s) => ({ s, has: terms.filter((x) => s.text.toLowerCase().includes(x)) })).filter((x) => x.has.length);
@@ -280,8 +295,10 @@ async function searchTranscripts(ctx: ToolContext, terms: string[]): Promise<TxH
     const firsts = new Set(terms.map((x) => lines.find((l) => l.has.includes(x))).filter(Boolean));
     const best = [...lines].sort((a, b) => Number(firsts.has(b)) - Number(firsts.has(a)) || b.has.length - a.has.length || a.s.start - b.s.start)
       .slice(0, 6).sort((a, b) => a.s.start - b.s.start);
-    return { material_id: t.material_id, tldr: t.tldr, score: Math.round(1000 * (weight.get(t.material_id) ?? 0)), lines: best.map((x) => ({ start: x.s.start, text: x.s.text })) };
-  }).filter((t) => t.lines.length);
+    return { material_id: t.material_id, tldr: t.tldr, score: Math.round(1000 * (weight.get(t.material_id) ?? 0)), n: lines.length, lines: best.map((x) => ({ start: x.s.start, text: x.s.text })) };
+  }).filter((t) => t.lines.length)
+    // best first, as the database search orders them: score, then how many lines match
+    .sort((a, b) => b.score - a.score || b.n - a.n).map(({ n: _n, ...t }) => t);
 }
 
 function snippet(text: string, terms: string[]) {
@@ -394,7 +411,7 @@ export async function runTool(ctx: ToolContext, name: string, raw: unknown): Pro
     const text = JSON.stringify(out);
     collectLinks(out, ctx.links);
     const isError = typeof out === "object" && out !== null && "error" in out;
-    return { content: text.length > MAX_RESULT_CHARS ? text.slice(0, MAX_RESULT_CHARS) + "…(cut off)" : text, isError };
+    return { content: text.length > MAX_RESULT_CHARS ? cutAt(text, MAX_RESULT_CHARS) + "…(cut off)" : text, isError };
   } catch (e) {
     return { content: (e as Error).message || "The lookup failed.", isError: true };
   }

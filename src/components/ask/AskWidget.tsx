@@ -72,9 +72,16 @@ export default function AskWidget({ enabled, signedIn, account }: { enabled: boo
   // focus moves into the panel when it opens and back to the button when it closes
   useEffect(() => {
     if (open) { const id = setTimeout(() => (box.current && !box.current.disabled ? box.current : closer.current)?.focus(), 30); return () => clearTimeout(id); }
-    if (returnFocus.current) { returnFocus.current = false; fab.current?.focus(); }
+    if (returnFocus.current) {
+      returnFocus.current = false;
+      // the button is hidden while the recorder's action bar is up: go to that bar instead
+      const f = fab.current;
+      if (f?.getClientRects().length) f.focus();
+      else document.querySelector<HTMLElement>(".rec-actions button:not(:disabled)")?.focus();
+    }
   }, [open]);
-  useEffect(() => { log.current?.scrollTo({ top: log.current.scrollHeight }); }, [turns, draft, status]);
+  // a reopened panel starts at the latest message too
+  useEffect(() => { log.current?.scrollTo({ top: log.current.scrollHeight }); }, [turns, draft, status, open]);
   const close = () => { returnFocus.current = true; setOpen(false); };
 
   if (HIDDEN.test(path)) return null;
@@ -86,11 +93,13 @@ export default function AskWidget({ enabled, signedIn, account }: { enabled: boo
     const kept = (a?: Turn) => a?.role === "assistant" && !a.error && !a.stopped;
     const history = [...turns.filter((t, i) => (t.role === "assistant" ? kept(t) : kept(turns[i + 1]))), { role: "user" as const, content: question }];
     setTurns((t) => [...t, { role: "user", content: question }]);
-    setInput(""); setDraft(""); setStatus("Thinking…"); setSaid(""); setBusy(true);
+    // a suggestion chip leaves what was typed in the box
+    if (q === input) setInput("");
+    setDraft(""); setStatus("Thinking…"); setSaid(""); setBusy(true);
     const ctl = new AbortController();
     abort.current = ctl;
     const mine = key;
-    let text = "", sources: Turn["sources"] = [], links: string[] = [], error = "", ended = false;
+    let text = "", sources: Turn["sources"] = [], links: string[] = [], error = "", ended = false, complete = false;
     try {
       const res = await fetch("/api/ask", {
         method: "POST", headers: { "content-type": "application/json" }, signal: ctl.signal,
@@ -119,11 +128,11 @@ export default function AskWidget({ enabled, signedIn, account }: { enabled: boo
           else if (e.t === "status") setStatus(e.text);
           else if (e.t === "sources") { sources = e.items; links = e.links ?? []; }
           else if (e.t === "error") { error = e.text; ended = true; }
-          else if (e.t === "done") ended = true;
+          else if (e.t === "done") { ended = true; complete = true; }
         }
       }
     } catch {
-      if (!ctl.signal.aborted) { error = "The connection dropped before the answer was finished. Try again."; ended = true; }
+      if (!ctl.signal.aborted && !ended) { error = "The connection dropped before the answer was finished. Try again."; ended = true; }
     }
     // the stream stopped without saying it was finished (the host cut it off)
     if (!ended && !ctl.signal.aborted) error = "The answer was interrupted before it finished. Try again.";
@@ -133,7 +142,8 @@ export default function AskWidget({ enabled, signedIn, account }: { enabled: boo
     const stopped = ctl.signal.aborted;
     setTurns((t) => [
       ...t,
-      ...(answer ? [{ role: "assistant" as const, content: answer, sources, links, ...(stopped ? { stopped } : {}) }] : []),
+      // an answer that never reached "done" (stopped, cut off or dropped) is marked, so it is not sent back as history
+      ...(answer ? [{ role: "assistant" as const, content: answer, sources, links, ...(!complete ? { stopped: true } : {}) }] : []),
       ...(error ? [{ role: "assistant" as const, content: error, error: true }] : []),
       ...(!answer && !error && ctl.signal.aborted ? [{ role: "assistant" as const, content: "Stopped.", error: true }] : []),
     ]);
@@ -182,14 +192,18 @@ export default function AskWidget({ enabled, signedIn, account }: { enabled: boo
               <div className="ask-empty">
                 <p className="muted small">Ask about Kleros events, talks and recordings. {signedIn ? "Answers include everything your account can see." : "Answers cover what is public on this site."}</p>
                 <div className="ask-chips">
-                  {suggestions(path).map((s) => <button key={s} type="button" className="ask-chip" onClick={() => { box.current?.focus(); send(s); }}>{s}</button>)}
+                  {suggestions(path).map((s) => <button key={s} type="button" className="ask-chip" onClick={(e) => {
+                    // keep keyboard focus in the panel, but don't pop up a phone's keyboard over the answer
+                    if (e.detail === 0 || !window.matchMedia("(pointer: coarse)").matches) box.current?.focus();
+                    send(s);
+                  }}>{s}</button>)}
                 </div>
               </div>
             ) : null}
             {turns.map((t, i) => (
               <div key={i} className={`ask-msg ${t.role}${t.error ? " err" : ""}`}>
                 {t.role === "assistant" && !t.error ? <AnswerText text={t.content} links={links} /> : <p>{t.content}</p>}
-                {t.stopped && <p className="muted small">Stopped before it finished.</p>}
+                {t.stopped && <p className="muted small">This answer did not finish.</p>}
                 {t.sources && t.sources.length > 0 && (
                   <div className="ask-sources">
                     {t.sources.map((s) => <Link key={s.href} href={s.href} className="ask-source">{s.label}</Link>)}
@@ -212,7 +226,11 @@ export default function AskWidget({ enabled, signedIn, account }: { enabled: boo
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.preventDefault(); send(input); } }} />
             {busy
-              ? <button type="button" ref={stopper} className="btn sm" onClick={() => abort.current?.abort()}>Stop</button>
+              ? <button type="button" ref={stopper} className="btn sm" onClick={(e) => {
+                // the second click of a double-click on Ask lands here: ignore it
+                if (e.detail > 1) return;
+                abort.current?.abort();
+              }}>Stop</button>
               : <button type="submit" className="btn sm primary" disabled={!enabled || !input.trim()}>Ask</button>}
           </form>
           <p className="ask-foot muted">Answers can be wrong. Check the linked pages. Not legal or financial advice.</p>

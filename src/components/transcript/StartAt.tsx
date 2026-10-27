@@ -20,9 +20,11 @@ export default function StartAt() {
   useEffect(() => { setAsked(false); setGone(false); }, [t]);
   useEffect(() => {
     if (!asked || gone || !media.playing || Math.abs(media.t - t) > 8) return;
-    // if the button still has keyboard focus, hand it to a visible control of the player
+    // if the button still has keyboard focus, hand it to the player's play/pause control (not, say,
+    // the slide player's "Previous slide", where Space would jump back)
     if (document.activeElement === btn.current) {
-      const target = Array.from(document.querySelectorAll<HTMLElement>("[data-player] video[controls], [data-player] audio[controls], [data-player] iframe, [data-player] button"))
+      const target = ["video[controls]", "audio[controls]", "iframe", "button[aria-label='Pause']", "button[aria-label='Play']"]
+        .flatMap((s) => Array.from(document.querySelectorAll<HTMLElement>(`[data-player] ${s}`)))
         .find((el) => el.getClientRects().length > 0);
       target?.focus({ preventScroll: true });
     }
