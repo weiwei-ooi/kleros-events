@@ -234,6 +234,7 @@ where m.event_id = e.id
   and m.kind in ('video', 'link', 'social', 'slides')
   and m.file_path is null and m.pdf_path is null and m.audio_path is null
   and not exists (select 1 from _m where _m.slug = e.slug and _m.url = m.url)
+  and not exists (select 1 from feed_applied f where f.ok and f.url = m.url)   -- added by the socials feed (0009)
   and (to_regclass('public.transcripts') is null
        or not exists (select 1 from transcripts t where t.material_id = m.id));
 
