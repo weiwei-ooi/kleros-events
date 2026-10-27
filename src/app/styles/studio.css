@@ -107,3 +107,11 @@
   .le-foot > .muted { flex-basis: 100%; }
   .le-foot .spacer { display: none; }
 }
+
+/* Talk page: slides kept as a link next to a recording (RecordingSlides) */
+.rec-slides-card { display: flex; gap: var(--s-3); align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.rec-slides-card p { margin: 4px 0 0; }
+.rec-slides-edit summary { cursor: pointer; color: var(--muted); font-weight: 500; }
+.rec-slides-edit[open] summary { margin-bottom: var(--s-3); }
+.rec-slides-pdf { margin-top: var(--s-3); padding-top: var(--s-3); border-top: 1px solid var(--line); }
+.rec-slides-pdf p { margin: 0; }

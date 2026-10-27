@@ -7,7 +7,8 @@ import TalkPlayer from "@/components/TalkPlayer";
 import { driveId, fileUrl, youtubeId } from "@/components/MaterialRow";
 import PromoStrip from "@/components/PromoStrip";
 import EventChip from "@/components/studio/EventChip";
-import { currentUser } from "@/lib/supabase/server";
+import { currentUser, supabaseServer } from "@/lib/supabase/server";
+import RecordingSlides from "@/components/studio/RecordingSlides";
 import { getTranscript, transcriptSetup } from "@/lib/transcript/data";
 import TranscriptArea from "@/components/transcript/TranscriptArea";
 import { MediaPlayer, YouTubePlayer } from "@/components/transcript/MediaPlayers";
@@ -40,6 +41,9 @@ export default async function TalkPage({ params }: { params: Promise<{ id: strin
   const drive = driveId(m.url);
   const yt = youtubeId(m.url);
   const isTeam = !!(profile?.is_team || profile?.is_admin);
+  // editors of the item (the team, or a private event's members) manage the slides of a recording
+  const canEdit = !!user && (m.kind === "talk" || m.kind === "audio")
+    && !!(await (await supabaseServer()).rpc("material_editable", { p_material: m.id })).data;
 
   let player: React.ReactNode;
   let canSeek = false;
@@ -58,7 +62,7 @@ export default async function TalkPage({ params }: { params: Promise<{ id: strin
 
   const recorded = m.kind === "talk" || m.kind === "audio" || m.kind === "video";
   const canTranscribe = (m.kind === "talk" && !!m.audio_path) || ((m.kind === "audio" || m.kind === "video") && !!m.file_path);
-  const detail = [m.speaker, m.kind === "audio" ? "Audio recording" : m.pages ? `${m.pages} slides` : "", m.duration_seconds ? fmtDur(m.duration_seconds) : ""].filter(Boolean).join(" · ");
+  const detail = [m.speaker, m.kind === "audio" ? (m.url ? "Recording with slides" : "Audio recording") : m.pages ? `${m.pages} slides` : "", m.duration_seconds ? fmtDur(m.duration_seconds) : ""].filter(Boolean).join(" · ");
 
   return (
     <div className="wrap page stack">
@@ -78,6 +82,7 @@ export default async function TalkPage({ params }: { params: Promise<{ id: strin
           <div className="note talk-unlinked">Not linked to any event yet, so only the Kleros team can see it. <Link href="/admin/recordings">Link it to events</Link></div>
         )}
       </div>
+      {(m.kind === "talk" || m.kind === "audio") && <RecordingSlides m={m} canEdit={canEdit} />}
       {recorded && (transcript || isTeam) ? (
         <TranscriptArea materialId={m.id} title={m.title} speaker={m.speaker} initial={transcript} isTeam={isTeam}
           canSeek={canSeek} canTranscribe={canTranscribe} setup={transcriptSetup()} durationHint={m.duration_seconds}>

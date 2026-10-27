@@ -48,7 +48,7 @@ type EventRef = Pick<EventRow, "slug" | "title" | "starts_on">;
 /** A watchable talk: preview, title, speaker, event and a clear Watch action. */
 export function TalkCard({ m, event, note }: { m: Material; event?: EventRef; note?: string }) {
   const href = `/talks/${m.id}`;
-  const detail = m.kind === "talk" ? (m.pages ? plural(m.pages, "slide") + " with audio" : "Slides with audio") : m.kind === "audio" ? "Audio recording" : "Video";
+  const detail = m.kind === "talk" ? (m.pages ? plural(m.pages, "slide") + " with audio" : "Slides with audio") : m.kind === "audio" ? (m.url ? "Recording with slides" : "Audio recording") : "Video";
   const verb = m.kind === "audio" ? "Listen" : "Watch";
   return (
     <article className="card talk">
@@ -79,7 +79,8 @@ export function TalkCard({ m, event, note }: { m: Material; event?: EventRef; no
  * details, and one right-aligned action (Watch, Slides or Open).
  */
 export function ArchiveRow({ m, eventSlug }: { m: Material; eventSlug: string }) {
-  const file = m.url || fileUrl(m.file_path);
+  // a recording's url is its slides link; its own file is the audio
+  const file = m.kind === "audio" && m.file_path ? fileUrl(m.file_path) : m.url || fileUrl(m.file_path);
   const detail = isWatchable(m)
     ? [m.kind === "talk" ? (m.pages ? plural(m.pages, "slide") + " with audio" : "Slides with audio") : "Video", m.duration_seconds ? fmtDur(m.duration_seconds) : ""]
     : [m.kind === "link" || m.kind === "social" ? hostOf(m.url) : "", m.kind === "audio" && m.duration_seconds ? fmtDur(m.duration_seconds) : "", fmtSize(m.size_bytes)];
