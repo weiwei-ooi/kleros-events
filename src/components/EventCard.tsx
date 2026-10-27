@@ -6,8 +6,9 @@ import { fileUrl } from "./MaterialRow";
 import Thumb from "./Thumb";
 import GenCover from "./Cover";
 
-/** One quiet status label at most: draft beats live beats example. */
-export function statusLabel(e: Pick<EventRow, "status" | "starts_on" | "ends_on" | "is_example">) {
+/** One quiet status label at most: private beats draft beats live beats example. */
+export function statusLabel(e: Pick<EventRow, "status" | "starts_on" | "ends_on" | "is_example"> & { visibility?: EventRow["visibility"] }) {
+  if (e.visibility === "private") return { cls: "draft", text: "Private" };
   if (e.status === "draft") return { cls: "draft", text: "Draft" };
   if (isLive(e)) return { cls: "live", text: "Happening now" };
   if (e.is_example) return { cls: "ex", text: "Example" };

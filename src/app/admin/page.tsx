@@ -12,7 +12,7 @@ import LumaSync, { type SyncLog } from "@/components/admin/LumaSync";
 export const metadata: Metadata = { title: "Events desk" };
 export const dynamic = "force-dynamic";
 
-const TABS = ["upcoming", "past", "drafts", "requests"] as const;
+const TABS = ["upcoming", "past", "drafts", "private", "requests"] as const;
 type Tab = (typeof TABS)[number];
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
@@ -38,11 +38,14 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     ((counts.data ?? []) as { event_id: string; going: number }[]).map((c) => [c.event_id, c.going]),
   );
 
-  const published = events.filter((e) => e.status === "published");
+  // private events reach this list only for their creator and collaborators (RLS, 0010)
+  const pub = events.filter((e) => e.visibility !== "private");
+  const published = pub.filter((e) => e.status === "published");
   const lists = {
     upcoming: published.filter((e) => !isPast(e)),
     past: published.filter((e) => isPast(e)).reverse(),
-    drafts: events.filter((e) => e.status === "draft"),
+    drafts: pub.filter((e) => e.status === "draft"),
+    private: events.filter((e) => e.visibility === "private"),
   };
   const needsMaterials = lists.past.filter((e) => !matCount[e.id]);
   const requests = reqs.data ?? [];
@@ -52,6 +55,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     { id: "upcoming", label: "Upcoming", n: lists.upcoming.length },
     { id: "past", label: "Past", n: lists.past.length, hint: needsMaterials.length > 0 },
     { id: "drafts", label: "Drafts", n: lists.drafts.length },
+    { id: "private", label: "Private", n: lists.private.length },
     { id: "requests", label: "Meeting requests", n: openRequests, hint: openRequests > 0 },
   ];
 
@@ -98,6 +102,7 @@ const EMPTY: Record<Exclude<Tab, "requests">, [string, string]> = {
   upcoming: ["No upcoming events", "Published events with a future date show up here."],
   past: ["No past events yet", "Events move here the day after they end."],
   drafts: ["No drafts", "Events saved as draft stay hidden from the public site until published."],
+  private: ["No private events", "Private events are seen only by their creator and the collaborators they add. Choose Private when adding an event."],
 };
 
 function EventList({ events, tab, matCount, going }: {
@@ -121,6 +126,7 @@ function EventList({ events, tab, matCount, going }: {
                 <span>{ROLE_SHORT[e.kleros_role]}</span><span aria-hidden>·</span><span>{place(e)}</span>
                 {isLive(e) && e.status === "published" && <span className="pill live">Today</span>}
                 {e.is_example && <span className="pill ex">Example</span>}
+                {e.visibility === "private" && <span className="pill draft">Private</span>}
               </div>
             </div>
             <div className="desk-stats">

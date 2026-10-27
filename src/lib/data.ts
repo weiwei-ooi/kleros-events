@@ -3,14 +3,15 @@ import { supabaseServer, supabaseConfigured } from "./supabase/server";
 import type { AgendaItem, EventRow, EventTeamRow, Material } from "./types";
 
 /**
- * Published events, for the public listings (home, /events, /talks, /me). RLS lets the team
- * read drafts too, so filter here; the desk (/admin) runs its own query that includes drafts,
- * and getEvent still opens a draft's page directly for the team.
+ * Published public events, for the public listings (home, /events, /talks, /me). RLS lets the
+ * team read drafts and members read private events too, so filter here; the desk (/admin) runs
+ * its own query that includes them, and getEvent opens a draft's or private event's page
+ * directly for those who may see it.
  */
 export async function listEvents(): Promise<EventRow[]> {
   if (!supabaseConfigured) return [];
   const sb = await supabaseServer();
-  const { data } = await sb.from("events").select("*").eq("status", "published").order("starts_on", { ascending: true });
+  const { data } = await sb.from("events").select("*").eq("status", "published").eq("visibility", "public").order("starts_on", { ascending: true });
   return (data ?? []) as EventRow[];
 }
 
@@ -117,7 +118,7 @@ export async function getLiveEvent(slug: string): Promise<LiveEvent | null> {
   return (await getEvent(slug))?.event ?? null;
 }
 
-export type EventRef = Pick<EventRow, "id" | "slug" | "title" | "starts_on" | "ends_on" | "city" | "status">;
+export type EventRef = Pick<EventRow, "id" | "slug" | "title" | "starts_on" | "ends_on" | "city" | "status" | "visibility">;
 
 /**
  * One material with every event it is linked to that the caller can see (primary first).
@@ -128,10 +129,10 @@ export async function getMaterial(id: string) {
   if (!supabaseConfigured) return null;
   const sb = await supabaseServer();
   // materials and events are related twice (event_id, and material_events), so name the key
-  const { data } = await sb.from("materials").select("*, events!materials_event_id_fkey(id, slug, title, starts_on, ends_on, city, status)").eq("id", id).maybeSingle();
+  const { data } = await sb.from("materials").select("*, events!materials_event_id_fkey(id, slug, title, starts_on, ends_on, city, status, visibility)").eq("id", id).maybeSingle();
   if (!data) return null;
   const m = data as Material & { events: EventRef | null };
-  const linked = await sb.from("material_events").select("event_id, events(id, slug, title, starts_on, ends_on, city, status)").eq("material_id", id).order("created_at");
+  const linked = await sb.from("material_events").select("event_id, events(id, slug, title, starts_on, ends_on, city, status, visibility)").eq("material_id", id).order("created_at");
   let all: EventRef[] = linked.error
     ? (m.events ? [m.events] : [])
     : ((linked.data ?? []) as unknown as { events: EventRef | null }[]).map((r) => r.events).filter((e): e is EventRef => !!e);

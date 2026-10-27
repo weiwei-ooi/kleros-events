@@ -71,9 +71,9 @@ export default function LinkEvents({ materialId, title, linked, onChange, label 
     };
     setBusy("Creating the event…");
     const sb = supabaseBrowser();
-    let res = await sb.from("events").insert({ ...row, slug: base }).select("id, slug, title, starts_on, ends_on, city, country, status, event_type").single();
+    let res = await sb.from("events").insert({ ...row, slug: base }).select("id, slug, title, starts_on, ends_on, city, country, status, visibility, event_type").single();
     if (res.error && /slug/.test(res.error.message)) {
-      res = await sb.from("events").insert({ ...row, slug: `${base}-${crypto.randomUUID().slice(0, 4)}` }).select("id, slug, title, starts_on, ends_on, city, country, status, event_type").single();
+      res = await sb.from("events").insert({ ...row, slug: `${base}-${crypto.randomUUID().slice(0, 4)}` }).select("id, slug, title, starts_on, ends_on, city, country, status, visibility, event_type").single();
     }
     setBusy("");
     if (res.error) { setErr(res.error.message); return; }
@@ -135,7 +135,7 @@ export default function LinkEvents({ materialId, title, linked, onChange, label 
                           <b>{e.title}</b>
                           <span className="muted small">{fmtRange(e.starts_on, e.ends_on)} · {place(e)} · {e.event_type}</span>
                         </span>
-                        {e.status === "draft" && <span className="pill draft">Draft</span>}
+                        {e.visibility === "private" ? <span className="pill draft">Private</span> : e.status === "draft" && <span className="pill draft">Draft</span>}
                       </label>
                     </li>
                   );

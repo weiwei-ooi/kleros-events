@@ -23,6 +23,9 @@ export interface EventRow {
   cover_path: string | null;
   recap: string | null;
   status: "draft" | "published";
+  /** private: only its creator and collaborators can see it (0010) */
+  visibility: "public" | "private";
+  created_by: string | null;
   is_example: boolean;
 }
 

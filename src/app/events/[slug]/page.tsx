@@ -30,6 +30,8 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   const { event: e, agenda, team, materials } = data;
   const past = isPast(e);
   const isTeam = !!profile?.is_team;
+  // a private event only reaches this page for its creator and collaborators, who may edit it
+  const canEdit = isTeam || (!!user && e.visibility === "private");
   const status = statusLabel(e);
   // talks with slides, videos, and recordings (audio files) are all listed under Talks
   const talks = materials.filter(isTalkLike);
@@ -55,7 +57,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
 
   const sections = [
     hasAbout && ["about", "About"],
-    (talks.length > 0 || isTeam) && ["talks", talks.length ? `Talks (${talks.length})` : "Talks"],
+    (talks.length > 0 || canEdit) && ["talks", talks.length ? `Talks (${talks.length})` : "Talks"],
     otherCount > 0 && ["materials", `Slides & links (${otherCount})`],
     agenda.length > 0 && ["agenda", "Agenda"],
     team.length > 0 && ["team", "Kleros team"],
@@ -79,15 +81,17 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             <span>{fmtRange(e.starts_on, e.ends_on)}{time && ` · ${time}`}</span>
             <span>{where}</span>
           </div>
-          {(e.url && !past) || isTeam ? (
+          {(e.url && !past) || canEdit ? (
             <div className="row-flex">
               {e.url && !past && <a className="btn cta" href={e.url} target="_blank" rel="noopener">{ticketLabel} ↗</a>}
-              {isTeam && <Link className="btn" href={`/events/${e.slug}/host`}>Run this event</Link>}
-              {isTeam && <StudioButton mode="record" className="btn"><span className="dot" aria-hidden /> Record a session</StudioButton>}
-              {isTeam && <Link className="btn ghost" href={`/admin/events/${e.id}`}>Edit</Link>}
+              {canEdit && <Link className="btn" href={`/events/${e.slug}/host`}>Run this event</Link>}
+              {canEdit && <StudioButton mode="record" className="btn"><span className="dot" aria-hidden /> Record a session</StudioButton>}
+              {canEdit && <Link className="btn ghost" href={`/admin/events/${e.id}`}>Edit</Link>}
             </div>
           ) : null}
-          {e.status === "draft" && <div className="note">Draft. Only the Kleros team can see this event until it is published.</div>}
+          {e.visibility === "private"
+            ? <div className="note">Private. Only its creator and the collaborators they added can see this event, its materials and its questions.</div>
+            : e.status === "draft" && <div className="note">Draft. Only the Kleros team can see this event until it is published.</div>}
         </div>
         <EventCover e={e} className="ev-cover" />
       </header>
@@ -112,10 +116,10 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             </section>
           )}
 
-          {(talks.length > 0 || isTeam) && (
+          {(talks.length > 0 || canEdit) && (
             <section id="talks" className="sec">
               <h2>Talks</h2>
-              {isTeam && (
+              {canEdit && (
                 <div className="sec-tools" aria-label="Team tools">
                   <StudioButton mode="record" className="btn sm primary"><span className="dot" aria-hidden /> Record a session</StudioButton>
                   <StudioButton mode="files" className="btn sm">Add files or links</StudioButton>
@@ -123,7 +127,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                   <Link className="btn sm ghost" href="/admin/recordings">Recordings library</Link>
                 </div>
               )}
-              {isTeam && <EventStudio event={{ id: e.id, slug: e.slug, title: e.title }} agenda={agenda} recordings={bareRecordings} />}
+              {canEdit && <EventStudio event={{ id: e.id, slug: e.slug, title: e.title }} agenda={agenda} recordings={bareRecordings} />}
               {talks.length > 0
                 ? <div className="grid two-up">{talks.map((m) => <TalkCard key={m.id} m={m} event={e} />)}</div>
                 : <p className="quiet-empty">No talks yet. Record a session here, or add a recording or video link.</p>}
@@ -181,7 +185,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
 
           <section id="ask" className="sec">
             <h2>Ask the speaker</h2>
-            <AskTheSpeaker eventId={e.id} signedIn={!!user} isTeam={isTeam} displayName={profile?.display_name ?? ""} slug={e.slug} />
+            <AskTheSpeaker eventId={e.id} signedIn={!!user} isTeam={canEdit} displayName={profile?.display_name ?? ""} slug={e.slug} />
           </section>
 
           <section id="meet" className="sec">
@@ -193,7 +197,8 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               <div className="row-flex">
                 {booker?.calendar_url && <a className="btn sm primary" href={booker.calendar_url} target="_blank" rel="noopener">Pick a time with {booker.name.split(" ")[0]} ↗</a>}
               </div>
-              <MeetingForm eventId={e.id} />
+              {/* requests are read by the whole team, so none from a private event's page */}
+              {e.visibility !== "private" && <MeetingForm eventId={e.id} />}
             </div>
             <div className="prods">
               {products.map((p) => (

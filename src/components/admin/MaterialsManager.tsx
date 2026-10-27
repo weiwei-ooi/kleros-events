@@ -26,10 +26,11 @@ export default function MaterialsManager({ event, initial }: { event: EventRow; 
       try { await unlinkMaterial(m.id, event.id); } catch (e) { setErr((e as Error).message); return; }
     } else {
       const sb = supabaseBrowser();
+      // files first: storage lets whoever may edit the item remove its files only while the item exists
+      const paths = [m.file_path, m.pdf_path, m.audio_path].filter((x): x is string => !!x && !/^https?:\/\//.test(x));
+      if (paths.length) await sb.storage.from("materials").remove(paths);
       const { error } = await sb.from("materials").delete().eq("id", m.id);
       if (error) { setErr(error.message); return; }
-      const paths = [m.file_path, m.pdf_path, m.audio_path].filter(Boolean) as string[];
-      if (paths.length) await sb.storage.from("materials").remove(paths);
     }
     setList(list.filter((x) => x.id !== m.id));
   }

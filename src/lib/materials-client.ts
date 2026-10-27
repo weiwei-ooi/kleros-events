@@ -40,12 +40,12 @@ function linkError(msg: string) {
 }
 
 /** The fields the event pickers show. */
-export type PickEvent = Pick<EventRow, "id" | "slug" | "title" | "starts_on" | "ends_on" | "city" | "country" | "status" | "event_type">;
+export type PickEvent = Pick<EventRow, "id" | "slug" | "title" | "starts_on" | "ends_on" | "city" | "country" | "status" | "visibility" | "event_type">;
 
 /** Every event the team can see, drafts included, newest first. */
 export async function loadPickEvents(): Promise<PickEvent[]> {
   const { data, error } = await supabaseBrowser().from("events")
-    .select("id, slug, title, starts_on, ends_on, city, country, status, event_type").order("starts_on", { ascending: false });
+    .select("id, slug, title, starts_on, ends_on, city, country, status, visibility, event_type").order("starts_on", { ascending: false });
   if (error) throw error;
   return (data ?? []) as PickEvent[];
 }

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getEvent } from "@/lib/data";
 import { SITE_URL } from "@/lib/kleros";
-import { currentUser } from "@/lib/supabase/server";
+import { currentUser, supabaseServer } from "@/lib/supabase/server";
 import HostConsole from "@/components/live/HostConsole";
 
 export const metadata: Metadata = { title: "Host console", robots: { index: false } };
@@ -11,10 +11,14 @@ export const dynamic = "force-dynamic";
 
 export default async function HostPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const { user, profile } = await currentUser();
+  const { user } = await currentUser();
   const next = encodeURIComponent(`/events/${slug}/host`);
+  // the team runs public events; a private event's creator and collaborators run it
+  const data = user ? await getEvent(slug) : null;
+  if (user && !data) notFound();
+  const canRun = !!data && !!(await (await supabaseServer()).rpc("can_edit_event", { p_event: data.event.id })).data;
 
-  if (!user || !profile?.is_team) {
+  if (!user || !data || !canRun) {
     return (
       <div className="wrap page con-gate">
         <div className="eyebrow">Host console</div>
@@ -32,12 +36,10 @@ export default async function HostPage({ params }: { params: Promise<{ slug: str
     );
   }
 
-  const data = await getEvent(slug);
-  if (!data) notFound();
   const { event, agenda } = data;
   return (
     <HostConsole
-      event={{ id: event.id, slug: event.slug, title: event.title, starts_on: event.starts_on, ends_on: event.ends_on, venue: event.venue, city: event.city, status: event.status }}
+      event={{ id: event.id, slug: event.slug, title: event.title, starts_on: event.starts_on, ends_on: event.ends_on, venue: event.venue, city: event.city, status: event.status, visibility: event.visibility }}
       agenda={agenda}
       joinUrl={`${SITE_URL}/q/${slug}`}
     />

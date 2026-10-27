@@ -13,8 +13,9 @@ import { TalkCard } from "./MaterialRow";
 type Att = { event_id: string; status: string; note: string | null };
 type Prog = { material_id: string; position_seconds: number; finished: boolean };
 
-export default function MySpace({ profile, email, events, materials, attendance, progress }: {
+export default function MySpace({ profile, email, events, materials, attendance, progress, privateEvents = [], userId }: {
   profile: Profile; email: string; events: EventRow[]; materials: Material[]; attendance: Att[]; progress: Prog[];
+  privateEvents?: EventRow[]; userId?: string;
 }) {
   const router = useRouter();
   const [p, setP] = useState(profile);
@@ -58,11 +59,15 @@ export default function MySpace({ profile, email, events, materials, attendance,
         <div className="row-flex"><span className="muted small" role="status">{saved}</span><span style={{ flex: 1 }} /><button className="btn sm ghost" onClick={signOut}>Sign out</button></div>
       </aside>
       <div>
+        {privateEvents.length > 0 && (<>
+          <div className="section-h first"><div><div className="eyebrow">Private</div><h2>Private events you can open</h2></div></div>
+          <div className="grid">{privateEvents.map((e) => <EventCard key={e.id} e={e} mine={e.created_by === userId ? "You created this" : "Shared with you"} />)}</div>
+        </>)}
         {watching.length > 0 && (<>
-          <div className="section-h first"><h2>Continue watching</h2></div>
+          <div className={privateEvents.length ? "section-h" : "section-h first"}><h2>Continue watching</h2></div>
           <div className="grid">{watching.map(({ x, m }) => <TalkCard key={x.material_id} m={m!} event={evOf(m!)} note={`Stopped at ${fmtDur(x.position_seconds)}`} />)}</div>
         </>)}
-        <div className={watching.length ? "section-h" : "section-h first"}><div><div className="eyebrow">Picked for you</div><h2>Upcoming events that match your interests</h2></div></div>
+        <div className={watching.length || privateEvents.length ? "section-h" : "section-h first"}><div><div className="eyebrow">Picked for you</div><h2>Upcoming events that match your interests</h2></div></div>
         <div className="grid">
           {picks.map((x) => <EventCard key={x.e.id} e={x.e} why={x.why} />)}
           {!picks.length && <p className="quiet-empty" style={{ gridColumn: "1/-1" }}>{p.interests.length ? "Nothing upcoming fits these topics yet. Try following a few more." : "Follow a few topics to get recommendations."}</p>}

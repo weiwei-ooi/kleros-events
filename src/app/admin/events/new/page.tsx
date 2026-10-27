@@ -6,7 +6,7 @@ import EventForm from "@/components/admin/EventForm";
 export const dynamic = "force-dynamic";
 
 export default async function NewEventPage() {
-  const { isTeam } = await requireTeam("/admin/events/new");
+  const { user, isTeam } = await requireTeam("/admin/events/new");
   if (!isTeam) return <NotTeam />;
   return (
     <div className="wrap page stack adm-page adm-narrow">
@@ -14,10 +14,10 @@ export default async function NewEventPage() {
         <div>
           <Link href="/admin" className="small muted ed-back">← Events desk</Link>
           <h1>Add an event</h1>
-          <p className="muted">Save as draft to keep it off the public site. Agenda, team and materials can be added after saving.</p>
+          <p className="muted">Public events can be saved as a draft to keep them off the site until ready. Private events are only for you and the collaborators you add. Agenda, team and materials can be added after saving.</p>
         </div>
       </header>
-      <EventForm />
+      <EventForm me={{ isTeam, userId: user.id }} />
     </div>
   );
 }
