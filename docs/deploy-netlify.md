@@ -9,7 +9,10 @@ The Vercel deployment can keep running alongside. Both read the same Supabase da
 1. In Netlify, go to **Add new project → Import an existing project → GitHub**, then pick `weiwei-ooi/kleros-events`, branch `main`.
 2. Leave the build settings empty. They come from `netlify.toml`: `npm run build`, publish `.next`, Node 22.
 
-The repository is private and belongs to Wei Wei's personal GitHub account. If Netlify does not list it, the owner must allow the Netlify GitHub app on it once. Wei Wei does this at https://github.com/apps/netlify/installations/new: choose `weiwei-ooi`, then **Only select repositories**, then `kleros-events`.
+The repository belongs to Wei Wei's personal GitHub account, so Netlify may not list it for someone else. Two ways around that:
+
+- **Fork it** into an account Netlify can read, such as the Kleros GitHub organization, and import the fork. New changes then reach the site when someone presses **Sync fork** on GitHub. This needs the repository to be public.
+- **Allow the Netlify app** on the original. Wei Wei does this once at https://github.com/apps/netlify/installations/new: choose `weiwei-ooi`, then **Only select repositories**, then `kleros-events`. New changes then deploy on their own.
 
 ## 2. Environment variables
 
