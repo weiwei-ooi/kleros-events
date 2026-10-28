@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BUSY, NOT_SET_UP, isUntimed, type Segment, type Summary, type TranscriptRow, type TranscriptState } from "@/lib/transcript/types";
-import { clock, indexAt, paragraphs, parseTranscriptFile, toSrt, toTxt } from "@/lib/transcript/parse";
+import { WHO, clock, indexAt, paragraphs, parseTranscriptFile, toSrt, toTxt } from "@/lib/transcript/parse";
 import { summaryText } from "@/lib/transcript/summary";
 import { fetchTranscript, runTranscript, saveText, seekTo, useMediaTime } from "@/lib/transcript/client";
 import { slugify } from "@/lib/format";
@@ -192,6 +192,13 @@ function Highlight({ text, q }: { text: string; q: string }) {
   return <>{parts.map((p, i) => (i % 2 ? <mark key={i}>{p}</mark> : p))}</>;
 }
 
+/** A paragraph, with its speaker prefix ("Wei Wei: ") in bold. */
+function Para({ text, q }: { text: string; q: string }) {
+  const m = WHO.exec(text);
+  if (!m) return <Highlight text={text} q={q} />;
+  return <><b className="tx-who"><Highlight text={m[1]} q={q} />:</b> <Highlight text={text.slice(m[0].length)} q={q} /></>;
+}
+
 function TranscriptBody({ segs, title, speaker, timed, seekable, language }: { segs: Segment[]; title: string; speaker?: string | null; timed: boolean; seekable: boolean; language?: string | null }) {
   const paras = useMemo(() => paragraphs(segs), [segs]);
   const { t, playing } = useMediaTime();
@@ -245,7 +252,7 @@ function TranscriptBody({ segs, title, speaker, timed, seekable, language }: { s
             {seekable
               ? <button type="button" className="tx-t mono" onClick={() => jump(p.start)} aria-label={`Play from ${clock(p.start)}`}>{clock(p.start)}</button>
               : <span className="tx-t mono">{timed ? clock(p.start) : ""}</span>}
-            <p onClick={seekable ? () => jump(p.start) : undefined} className={seekable ? "seek" : ""}><Highlight text={p.text} q={q.trim()} /></p>
+            <p onClick={seekable ? () => jump(p.start) : undefined} className={seekable ? "seek" : ""}><Para text={p.text} q={q.trim()} /></p>
           </div>
         ))}
       </div>

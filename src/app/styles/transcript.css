@@ -71,6 +71,7 @@ button.tx-t:hover { background: var(--accent-soft); color: var(--white); }
 .tx-line .tx-t { padding-top: 0.28em; }
 .tx-line p { line-height: 1.7; max-width: 72ch; color: var(--fg); }
 .tx-line p.seek { cursor: pointer; }
+.tx-line .tx-who { font-weight: 600; color: var(--white); }
 .tx-line:hover { background: color-mix(in srgb, var(--sunk) 55%, transparent); }
 .tx-line.cur { background: var(--accent-soft); }
 .tx-line.cur p { color: var(--white); }

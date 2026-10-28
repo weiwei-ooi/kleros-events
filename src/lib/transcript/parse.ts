@@ -158,19 +158,32 @@ export function joinParts(parts: { offset: number; segments: Segment[] }[]): Seg
 
 export const plainText = (segs: Segment[]) => segs.map((s) => s.text).join(" ").replace(/\s+/g, " ").trim();
 
+/** A speaker prefix at the start of a segment ("Ana: ", "Wei Wei: ", "Speaker 2: "). */
+export const WHO = /^([A-Z][\p{L}'.-]*(?: [\p{Lu}\d][\p{L}\d'.-]*){0,3}): /u;
+
 /**
  * Display paragraphs: consecutive segments merged until a sentence ends and the paragraph
- * is long enough, a pause of over 2.5 s, or 60 s of speech. Each keeps the start of its
- * first segment, so clicking it seeks there.
+ * is long enough, a pause of over 2.5 s, 60 s of speech, or a new speaker. A repeated
+ * prefix of the same speaker is dropped. Each keeps the start of its first segment, so
+ * clicking it seeks there.
  */
 export function paragraphs(segs: Segment[], { minChars = 220, maxSecs = 60, gap = 2.5 } = {}): Segment[] {
   const out: Segment[] = [];
   let cur: Segment | null = null;
+  let curWho: string | undefined;
+  // a prefix counts as a speaker only when it starts at least two segments ("Note: " once does not)
+  const seen = new Map<string, number>();
+  for (const s of segs) { const w = WHO.exec(s.text)?.[1]; if (w) seen.set(w, (seen.get(w) ?? 0) + 1); }
   for (const s of segs) {
-    if (cur && (s.start - cur.end > gap || s.start - cur.start > maxSecs || (cur.text.length >= minChars && /[.!?]["')\]]*$/.test(cur.text)))) {
+    const hit = WHO.exec(s.text);
+    const m = hit && (seen.get(hit[1]) ?? 0) >= 2 ? hit : null;
+    if (cur && ((m && m[1] !== curWho) || s.start - cur.end > gap || s.start - cur.start > maxSecs || (cur.text.length >= minChars && /[.!?]["')\]]*$/.test(cur.text)))) {
       out.push(cur); cur = null;
     }
-    cur = cur ? { start: cur.start, end: Math.max(cur.end, s.end), text: `${cur.text} ${s.text}` } : { ...s };
+    if (m) curWho = m[1];
+    if (cur) cur = { start: cur.start, end: Math.max(cur.end, s.end), text: `${cur.text} ${m ? s.text.slice(m[0].length) : s.text}` };
+    // a paragraph that starts mid-turn still says who is speaking
+    else cur = { ...s, text: !m && curWho ? `${curWho}: ${s.text}` : s.text };
   }
   if (cur) out.push(cur);
   return out;
