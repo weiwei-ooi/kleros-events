@@ -163,6 +163,10 @@ body:has(.scr-page) { overflow: hidden; }
 /* ---------- big screen card ---------- */
 .bs-preview { width: 100%; max-width: 640px; justify-self: center; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
 .bs-help { margin: 0; }
+.bs-approval { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; cursor: pointer; }
+.bs-approval input { margin-top: 3px; accent-color: var(--accent); }
+.bs-approval > span { display: grid; gap: 2px; }
+.bs-approval b { font-weight: 600; font-size: 0.9rem; color: var(--fg); }
 .bs-join { display: grid; gap: 6px; padding-top: 12px; border-top: 1px solid var(--line); }
 .bs-join-row { display: flex; align-items: center; gap: 8px; }
 .bs-url { flex: 1; min-width: 0; font-size: 0.85rem; color: var(--lavender); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -186,6 +190,8 @@ body:has(.scr-page) { overflow: hidden; }
 .qp-meta { font-size: 0.78rem; color: var(--muted); margin-top: 4px; }
 .qp-acts { display: flex; gap: 6px; flex-wrap: wrap; }
 .qp-acts .btn.sm { padding: 5px 9px; font-size: 0.84rem; }
+.qp-item.is-waiting { border-style: dashed; }
+.qp-wait { color: var(--warn); }
 
 /* ---------- big screen (projector and preview) ----------
    Everything is sized in --u, one hundredth of the screen height (or of the 16:9 box that

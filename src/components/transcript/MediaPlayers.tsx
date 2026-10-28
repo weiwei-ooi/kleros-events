@@ -2,6 +2,7 @@
 // Players that report their time to the transcript and accept seek requests from it.
 import { useEffect, useRef } from "react";
 import { emitTime, onSeek } from "@/lib/transcript/client";
+import { retryMedia, trackPlaying } from "@/lib/mediaRetry";
 
 /** Native audio or video element, wired to the transcript. Fixes the missing duration of MediaRecorder WebM. */
 export function MediaPlayer({ src, kind, title }: { src: string; kind: "audio" | "video"; title: string }) {
@@ -36,13 +37,15 @@ export function MediaPlayer({ src, kind, title }: { src: string; kind: "audio" |
   const common = {
     src, preload: "metadata" as const, controls: true, "aria-label": title,
     onLoadedMetadata: (e: React.SyntheticEvent<HTMLMediaElement>) => fixDuration(e.currentTarget),
+    // the signed file address expired (a long pause): fetch a fresh one
+    onError: (e: React.SyntheticEvent<HTMLMediaElement>) => retryMedia(e.currentTarget),
     onTimeUpdate: (e: React.SyntheticEvent<HTMLMediaElement>) => { if (!fixing.current) emitTime(e.currentTarget.currentTime, !e.currentTarget.paused); },
     onPlay: (e: React.SyntheticEvent<HTMLMediaElement>) => emitTime(e.currentTarget.currentTime, true),
     onPause: (e: React.SyntheticEvent<HTMLMediaElement>) => emitTime(e.currentTarget.currentTime, false),
   };
   return kind === "video"
-    ? <div className="video" data-player><video ref={(n) => { el.current = n; }} {...common} /></div>
-    : <div className="tx-audio" data-player><audio ref={(n) => { el.current = n; }} {...common} /></div>;
+    ? <div className="video" data-player><video ref={(n) => { el.current = n; if (n) trackPlaying(n); }} {...common} /></div>
+    : <div className="tx-audio" data-player><audio ref={(n) => { el.current = n; if (n) trackPlaying(n); }} {...common} /></div>;
 }
 
 // ---------------------------------------------------------------- YouTube

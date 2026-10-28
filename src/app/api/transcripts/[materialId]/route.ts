@@ -20,8 +20,17 @@ const STALE_MS = (ON_NETLIFY ? 2 : 6) * 60_000;       // a run older than this i
 
 type Step = "auto" | "transcript" | "summary" | "import";
 
-/** Public storage address of a file in the materials bucket (paths may already be full URLs). */
-const fileUrl = (path: string) => (/^https?:\/\//.test(path) ? path : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/materials/${path.split("/").map(encodeURIComponent).join("/")}`);
+/**
+ * An address the speech to text provider can fetch for a recording: for a file in the private
+ * materials bucket, a signed address made with the caller's own session (storage signs only files
+ * the caller may see), valid for an hour; a full URL stays as it is.
+ */
+async function recordingUrl(sb: SupabaseClient, path: string) {
+  if (/^https?:\/\//.test(path)) return path;
+  const { data, error } = await sb.storage.from("materials").createSignedUrl(path, 60 * 60);
+  if (error) throw new ProviderError(`The recording could not be found in storage (${error.message}).`, 422);
+  return data.signedUrl;
+}
 
 const json = (body: TranscriptState & Record<string, unknown>, status = 200) => NextResponse.json(body, { status });
 
@@ -63,7 +72,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ materia
 
   const info: TalkInfo = { title: m.title, speaker: m.speaker, event: m.events?.title ?? null, date: m.events?.starts_on ?? null };
   const save = async (patch: Partial<TranscriptRow>) => {
-    const { error } = await db.from("transcripts").upsert({ material_id: materialId, ...patch }, { onConflict: "material_id" });
+    // updated_by is set by the database from the session; with the service key it has no session
+    const { error } = await db.from("transcripts").upsert({ material_id: materialId, updated_by: user.id, ...patch }, { onConflict: "material_id" });
     if (error) throw new ProviderError(`Saving the transcript failed: ${error.message}`, 500);
   };
   const fail = async (e: unknown) => {
@@ -118,7 +128,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ materia
     if (!keys.transcribe) return json({ status: "error", error: NOT_SET_UP, setup: true }, 503);
     try {
       await save({ status: "transcribing", error: null, started_at: new Date().toISOString(), source: "audio" });
-      const r = await transcribe(fileUrl(path), info);
+      const r = await transcribe(await recordingUrl(session, path), info);
       if (!r.segments.length) throw new ProviderError("No speech was found in the recording.", 422);
       segs = r.segments; tProvider = r.provider;
       await save({

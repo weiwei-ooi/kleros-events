@@ -20,8 +20,13 @@ export default function LumaSync({ last }: { last: SyncLog | null }) {
     setBusy(false);
     if (luma.error || feed.error) return setMsg((luma.error ?? feed.error)!.message);
     const r = luma.data as { checked: number; updated: number; added: number };
-    const f = feed.data as { applied: number };
-    setMsg(`Checked ${r.checked} Luma events: ${r.updated} updated, ${r.added} added. ${f.applied} new updates from socials.`);
+    const f = feed.data as { applied: number; failed?: number; errors?: string[]; busy?: boolean };
+    const socials = f.busy
+      ? "The socials feed is already syncing."
+      : f.errors?.length
+        ? "The socials feed could not be read."
+        : `${f.applied} new updates from socials${f.failed ? `, ${f.failed} not applied yet` : ""}.`;
+    setMsg(`Checked ${r.checked} Luma events: ${r.updated} updated, ${r.added} added. ${socials}`);
     router.refresh();
   }
 

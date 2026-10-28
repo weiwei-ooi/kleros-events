@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { unlinkMaterial, uploadToStorage } from "@/lib/materials-client";
+import { removeFiles, unlinkMaterial, uploadToStorage } from "@/lib/materials-client";
 import type { EventRow, Material } from "@/lib/types";
 import MaterialRow from "../MaterialRow";
 import AddMaterials from "./AddMaterials";
@@ -27,21 +27,19 @@ export default function MaterialsManager({ event, initial }: { event: EventRow; 
     // including ones this editor cannot see, and deletes it when this was its last event. Files go
     // after the row, once nothing uses them.
     const { data: paths, error } = await sb.rpc("remove_material_from_event", { p_material: m.id, p_event: event.id });
+    let filesGone = true;
     if (error && /remove_material_from_event|schema cache|does not exist/i.test(error.message)) {
       // database not updated to 0012 yet
       if (sharedWith(m, event.id)) {
         try { await unlinkMaterial(m.id, event.id); } catch (e) { setErr((e as Error).message); return; }
       } else {
-        const files = [m.file_path, m.pdf_path, m.audio_path].filter((x): x is string => !!x && !/^https?:\/\//.test(x));
-        if (files.length) await sb.storage.from("materials").remove(files);
+        filesGone = await removeFiles([m.file_path, m.pdf_path, m.audio_path]);
         const { error: delErr } = await sb.from("materials").delete().eq("id", m.id);
         if (delErr) { setErr(delErr.message); return; }
       }
     } else if (error) { setErr(error.message); return; }
-    else {
-      const files = ((paths ?? []) as string[]).filter((x) => !/^https?:\/\//.test(x));
-      if (files.length) await sb.storage.from("materials").remove(files);
-    }
+    else filesGone = await removeFiles((paths ?? []) as string[]);
+    if (!filesGone) setErr(`"${m.title}" is removed, but its file could not be deleted from storage.`);
     setList(list.filter((x) => x.id !== m.id));
   }
   const added = (m: Material) => setList((l) => [...l, { ...m, event_ids: [event.id] }]);

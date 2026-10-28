@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AgendaItem } from "@/lib/types";
-import { useQuestions } from "@/lib/useQuestions";
+import { screenOk, useQuestions } from "@/lib/useQuestions";
 import BigScreenCard from "./BigScreenCard";
 import QuestionsPanel from "./QuestionsPanel";
 import Recorder, { type RecPhase, type RecTarget } from "./Recorder";
@@ -19,10 +19,10 @@ export default function HostConsole({ event, agenda, joinUrl, isTeam = true }: {
   /** false for a private event's collaborators outside the team: no automatic transcript */
   isTeam?: boolean;
 }) {
-  const { questions, loaded, live, error, reload } = useQuestions(event.id);
+  const { questions, loaded, live, error, reload } = useQuestions(event.id, { quick: true });
   const screen = useScreenMode(event.id, reload);
   const qr = useQr(joinUrl);
-  const fresh = useFresh(loaded ? questions.map((q) => q.id) : null);
+  const fresh = useFresh(loaded ? questions.filter(screenOk).map((q) => q.id) : null);
   const [target, setTarget] = useState<RecTarget | null>(null);
   const [phase, setPhase] = useState<RecPhase>("idle");
   const [recTitle, setRecTitle] = useState("");
@@ -92,11 +92,12 @@ export default function HostConsole({ event, agenda, joinUrl, isTeam = true }: {
         <div className="con-col con-center">
           <Recorder eventId={event.id} slug={event.slug} eventTitle={event.title} target={target} onPhase={onPhase} onDone={onDone} autoTranscribe={isTeam} />
           <BigScreenCard title={event.title} joinUrl={joinUrl} qr={qr} mode={screen.mode}
-            live={screen.live} error={screen.error} questions={questions} fresh={fresh} />
+            live={screen.live} error={screen.error} questions={questions} fresh={fresh}
+            approval={screen.approval} approvalSupported={screen.approvalSupported} onApproval={screen.setApproval} />
         </div>
         <div className="con-col con-right">
           <QuestionsPanel eventId={event.id} questions={questions} loaded={loaded} live={live} error={error} reload={reload}
-            onFeatured={() => { if (screen.mode !== "questions") screen.setMode("questions"); }} />
+            onFeatured={() => { if (screen.mode !== "questions") screen.setMode("questions"); }} approval={screen.approval} />
         </div>
       </div>
     </div>

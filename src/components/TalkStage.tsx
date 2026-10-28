@@ -4,6 +4,7 @@ import type { SlideMark } from "@/lib/types";
 import type { PdfDoc } from "@/lib/pdf";
 import { fmtDur } from "@/lib/format";
 import { emitTime, onSeek } from "@/lib/transcript/client";
+import { retryMedia, trackPlaying } from "@/lib/mediaRetry";
 
 /**
  * Slides + audio, kept in step by slide-change marks.
@@ -181,7 +182,8 @@ export default function TalkStage({ pdf, mode, audioUrl, marks, notes, onNotes, 
               <i className="head" style={{ left: total ? `${Math.min(100, (time / total) * 100)}%` : 0 }} />
             </div>
             <button className="btn sm ghost" onClick={() => { const r = [1, 1.25, 1.5, 2, 0.75]; const n = r[(r.indexOf(rate) + 1) % r.length]; audio.current!.playbackRate = n; setRate(n); }}>{rate}×</button>
-            <audio ref={audio} src={audioUrl} preload="metadata" hidden
+            <audio ref={(n) => { audio.current = n; if (n) trackPlaying(n); }} src={audioUrl} preload="metadata" hidden
+              onError={(e) => retryMedia(e.currentTarget)}
               onLoadedMetadata={(e) => onMeta(e.currentTarget)}
               onDurationChange={(e) => { if (!fixing.current && isFinite(e.currentTarget.duration)) setDur(e.currentTarget.duration); }}
               onPlay={(e) => { setPlaying(true); emitTime(e.currentTarget.currentTime, true); }} onPause={(e) => { setPlaying(false); emitTime(e.currentTarget.currentTime, false); }}

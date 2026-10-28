@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { currentUser, supabaseConfigured, supabaseServer } from "@/lib/supabase/server";
 import { runAsk, type AskEvent } from "@/lib/ask/agent";
-import { take, type Tier } from "@/lib/ask/limit";
+import { take, visitorsOff, type Tier } from "@/lib/ask/limit";
 import { cleanHistory } from "@/lib/ask/history";
 
 export const runtime = "nodejs";
@@ -48,11 +48,13 @@ export async function POST(req: Request) {
   if (typeof history === "string") return fail(history, 400);
   const page = typeof body.page === "string" && body.page.startsWith("/") ? body.page.slice(0, 300) : null;
 
+  // currentUser() counts an anonymous session (a QR guest) as signed out: guests ask as visitors
   const { user, profile } = await currentUser();
-  if (!user && process.env.ASK_PUBLIC === "off") return fail("Sign in to use the assistant.", 401);
+  if (!user && visitorsOff()) return fail("Sign in to use the assistant.", 401);
   const tier: Tier = user ? (profile?.is_team || profile?.is_admin ? "team" : "signed-in") : "visitor";
-  const limited = await take(user ? `u:${user.id}` : clientKey(req), tier);
-  if (limited) return fail(limited, 429);
+  // outside the team, only with the counts in the database (503 until then)
+  const refused = await take(user ? `u:${user.id}` : clientKey(req), tier);
+  if (refused) return fail(refused.error, refused.status);
 
   const sb = await supabaseServer();
   const enc = new TextEncoder();

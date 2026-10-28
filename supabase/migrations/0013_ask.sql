@@ -1,4 +1,8 @@
--- The site assistant (/api/ask). Optional: the assistant works without it. Safe to run more than once.
+-- The site assistant (/api/ask). Safe to run more than once.
+--
+--   * ask_take is needed, with SUPABASE_SERVICE_ROLE_KEY, before anyone outside the team can ask;
+--     without it only the team can. 0014_security.sql creates the same counter, so running 0014
+--     is enough for that. This file adds the transcript search on top.
 --
 --   * ask_take: question counts kept in the database, so the per-visitor and daily limits hold
 --     across every server instance. Only the server calls it, with SUPABASE_SERVICE_ROLE_KEY; the
@@ -9,7 +13,7 @@
 
 -- ---------- question counts ----------
 create table if not exists ask_usage (
-  key text not null,          -- a hashed visitor address, a user id, or 'all' for the daily total
+  key text not null,          -- a hashed visitor address, a user id, 'all' for the daily total, or 'check' (the app checking that this works)
   bucket text not null,       -- '10m:<number>' or 'day:<YYYY-MM-DD>' (UTC)
   n int not null default 0,
   day date not null default (now() at time zone 'utc')::date,

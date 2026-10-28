@@ -22,7 +22,7 @@ Each day the check:
    - new uploads on the Kleros YouTube channel (`UCEjwygFVVrSXhPNEKfweypA`);
    - blog.kleros.io;
    - Slack channels: #general-event-organisation, #comms-and-marketing, #communication-team, #announcements, plus any event channel such as #devcon-2026-mumbay or #ethcc-2027.
-3. Appends new items to `feed.json`, then commits and pushes the change to main. Vercel publishes the file, and the database picks it up at minute 17 of the next hour.
+3. Appends new items to `feed.json`, then commits and pushes the change to main. The database reads the file at minute 17 of every hour (see [Where the feed is read from](#where-the-feed-is-read-from)), so a new item reaches the site within about an hour.
 
 ### What gets in
 
@@ -43,6 +43,15 @@ Copy follows the Kleros writing rules:
 - No hashtags, no exclamation marks, no marketing-speak.
 - Full names on first mention (Fortunato Cinquepalmi, Federico Ast).
 - Descriptions are specific, saying what Kleros did there. For example: "William George spoke on dispute kits", not just "Kleros attended".
+
+## Where the feed is read from
+
+`sync_feed()` reads the file from the first of these addresses that answers with a feed (migration `0014_security.sql`):
+
+1. `https://raw.githubusercontent.com/weiwei-ooi/kleros-events/main/public/updates/feed.json`, the file on the main branch on GitHub. GitHub keeps a copy for up to five minutes, so a change pushed just before minute 17 can wait for the next hourly run.
+2. `https://events.kleros.io/updates/feed.json`, the copy the site publishes, used only when GitHub does not answer. It can lag behind main when the host builds from a fork that is synced by hand.
+
+`kleros-events.vercel.app` is not read: once that Vercel project is switched off, someone else could take the name and serve a feed of their own. For the same reason, before the `weiwei-ooi` GitHub account is renamed or deleted, or the repository is moved or renamed, the GitHub address in `feed_get()` needs to change first, with a new migration.
 
 ## Feed format
 
@@ -85,10 +94,11 @@ Copy follows the Kleros writing rules:
 ```
 
 - `id` is unique and never reused: the date found, plus the source type, plus the post or video id. Items are applied once. Later edits made on the site are kept, because an applied id is not applied again.
-- **For an existing event,** `event` carries `slug` plus only the fields to fill in or correct, for example a newer `cover_path` or a `recap`.
+- **For an existing event,** `event` carries `slug` plus only the fields to fill in or correct, for example a newer `cover_path` or a `recap`. The feed cannot set or change the `title` or the `url` of an event it did not add itself (one added on the site, from Luma or by a content script), even when the event has no `url` yet. It may repeat them unchanged. An item that tries is not applied; change those on the site.
 - **For a new event,** `slug` follows the existing pattern `name-city-year` (lowercase, hyphens). It needs at least `title` and `starts_on`.
 - `kleros_role` is one of `host`, `co_host`, `speaking`, `sponsor`, `booth`, `judging`, `attending`.
 - `region` is one of `Europe`, `Asia`, `Africa`, `Oceania`, `Latin America`, `North America`, `Online`.
 - `material_kind` is one of `video`, `slides`, `audio`, `doc`, `image`, `link`, `social`.
 - **Images:** use the image the post itself uses (`pbs.twimg.com/media/...?format=jpg&name=large`, `images.lumacdn.com/...`, or the organiser's own image). Never leave an event without one.
-- **Failures:** an item that fails (for example, its event slug does not exist yet) is retried every hour. The reason is shown in the `feed_applied` table.
+- **Links:** `source`, `url`, and the event's `url` and `cover_path` must pass this rule exactly, or the item is not applied at all: it starts with lowercase `https://`; then a host name of two or more dot-separated parts, each 1 to 63 letters, digits or hyphens that starts and ends with a letter or digit (so no underscores, no empty part, no trailing dot), optionally followed by `:` and a port of 1 to 5 digits; then `/`, `?`, `#` or the end. Only printable ASCII characters (no spaces, tabs or line breaks, no invisible characters), no user name or password before the host, at most 2048 characters. Percent-encode every other character, for example `https://es.wikipedia.org/wiki/Bogot%C3%A1`. The daily check cannot see rejections, so it checks every link against this rule before it commits.
+- **Failures:** an item that fails (for example, its event slug does not exist yet, or one of its links is not a plain `https://` link) is retried every hour. The reason is stored in the `feed_applied` table (Supabase, Table Editor), and **Sync now** on `/admin` says how many items were not applied. Only one run goes at a time: Sync now during the hourly run says the feed is already syncing.

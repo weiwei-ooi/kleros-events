@@ -92,6 +92,14 @@ export interface Question {
   votes: number;
   /** from question_scores: the signed-in viewer wrote it (author_id is null for anonymous questions) */
   mine?: boolean;
+  /** from question_scores (0014): sent without an account, set by the database; null for anonymous questions */
+  guest?: boolean | null;
+  /** from question_scores (0014): a host approved it for the big screen */
+  approved?: boolean;
+  /** from question_scores (0014): the big screen may show it. Missing before 0014 runs: treated as true. */
+  screen_ok?: boolean;
+  /** from question_scores (0014): sent from a Kleros team account, set by the database; null for anonymous questions */
+  team?: boolean | null;
 }
 
 export interface Profile {

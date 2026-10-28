@@ -8,10 +8,31 @@ const KIND: Record<string, string> = { talk: "TALK", slides: "PDF", audio: "AUD"
 // slides kept as a link (Google Slides, a claude.ai deck) are not a PDF
 const badge = (m: Pick<Material, "kind" | "file_path">) => (m.kind === "slides" && !m.file_path ? "DECK" : KIND[m.kind] ?? "FILE");
 
-export function fileUrl(path: string | null | undefined) {
+/**
+ * Where the site serves a stored file: /f/<path>, which hands out a signed storage address to
+ * visitors allowed to see the file (src/app/f/[...path]/route.ts). Full URLs stay as they are.
+ */
+export function fileUrl(path: string | null | undefined): string {
   if (!path) return "";
-  if (/^https?:\/\//.test(path)) return path;
-  return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/materials/${path}`;
+  if (/^https?:\/\//.test(path)) return linkUrl(path);
+  return `/f/${path.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+const OLD_PUBLIC = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/materials/`;
+
+/**
+ * A stored link as it should be shown. The public file address used before the materials bucket
+ * became private (migration 0014) no longer works, so one pasted into an item, a cover or a roster
+ * photo goes to /f/ instead, under the same rules as any other file. Anything else stays as it is.
+ */
+export function linkUrl(url: string | null | undefined): string {
+  if (!url) return "";
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !url.startsWith(OLD_PUBLIC)) return url;
+  try {
+    return fileUrl(url.slice(OLD_PUBLIC.length).split(/[?#]/)[0].split("/").map(decodeURIComponent).join("/"));
+  } catch {
+    return url;
+  }
 }
 
 // Talks people can sit down and watch: slide-synced talks and video recordings.
@@ -80,7 +101,7 @@ export function TalkCard({ m, event, note }: { m: Material; event?: EventRef; no
  */
 export function ArchiveRow({ m, eventSlug }: { m: Material; eventSlug: string }) {
   // a recording's url is its slides link; its own file is the audio
-  const file = m.kind === "audio" && m.file_path ? fileUrl(m.file_path) : m.url || fileUrl(m.file_path);
+  const file = m.kind === "audio" && m.file_path ? fileUrl(m.file_path) : linkUrl(m.url) || fileUrl(m.file_path);
   const detail = isWatchable(m)
     ? [m.kind === "talk" ? (m.pages ? plural(m.pages, "slide") + " with audio" : "Slides with audio") : "Video", m.duration_seconds ? fmtDur(m.duration_seconds) : ""]
     : [m.kind === "link" || m.kind === "social" ? hostOf(m.url) : "", m.kind === "audio" && m.duration_seconds ? fmtDur(m.duration_seconds) : "", fmtSize(m.size_bytes)];
@@ -89,7 +110,7 @@ export function ArchiveRow({ m, eventSlug }: { m: Material; eventSlug: string })
   let action: React.ReactNode;
   if (isWatchable(m)) action = <Link className="btn sm primary" href={`/talks/${m.id}`}>▶ Watch</Link>;
   else if (m.kind === "slides" && m.file_path) action = <Link className="btn sm" href={`/talks/${m.id}`}>Slides</Link>;
-  else if (m.kind === "slides" && m.url) action = <a className="btn sm" href={m.url} target="_blank" rel="noopener">Slides ↗</a>;
+  else if (m.kind === "slides" && m.url) action = <a className="btn sm" href={linkUrl(m.url)} target="_blank" rel="noopener">Slides ↗</a>;
   else if (file) action = <a className="btn sm" href={file} target="_blank" rel="noopener">Open ↗</a>;
   else action = <Link className="btn sm" href={`/events/${eventSlug}`}>Open</Link>;
   return (
@@ -112,7 +133,7 @@ export function ArchiveRow({ m, eventSlug }: { m: Material; eventSlug: string })
 
 /** A compact row for slides, audio, photos, documents, links and posts. */
 export default function MaterialRow({ m, eventTitle, eventSlug }: { m: Material; eventTitle?: string; eventSlug?: string }) {
-  const href = m.url || fileUrl(m.file_path);
+  const href = linkUrl(m.url) || fileUrl(m.file_path);
   const sub = [m.speaker,
     m.kind === "talk" ? `${m.pages ?? "?"} slides${m.duration_seconds ? " · " + fmtDur(m.duration_seconds) : ""}` : "",
     m.kind !== "talk" ? fmtSize(m.size_bytes) : "",
@@ -138,7 +159,7 @@ export default function MaterialRow({ m, eventTitle, eventSlug }: { m: Material;
         {isWatchable(m) && <Link className="btn sm primary" href={`/talks/${m.id}`}>▶ Watch</Link>}
         {m.kind === "audio" && m.file_path && <Link className="btn sm" href={`/talks/${m.id}`}>Transcript</Link>}
         {m.kind === "slides" && m.file_path && <Link className="btn sm" href={`/talks/${m.id}`}>View slides</Link>}
-        {m.kind === "slides" && !m.file_path && m.url && <a className="btn sm" href={m.url} target="_blank" rel="noopener">View slides ↗</a>}
+        {m.kind === "slides" && !m.file_path && m.url && <a className="btn sm" href={linkUrl(m.url)} target="_blank" rel="noopener">View slides ↗</a>}
         {!isWatchable(m) && m.kind !== "slides" && !(m.kind === "audio" && m.file_path) && href && <a className="btn sm" href={href} target="_blank" rel="noopener">Open ↗</a>}
       </div>
     </div>

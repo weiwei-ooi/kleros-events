@@ -3,13 +3,32 @@
 import { supabaseBrowser } from "./supabase/client";
 import type { EventRow, MaterialKind } from "./types";
 
-/** Uploads a file to the public materials bucket, under the event's folder (or "standalone"). */
+/** Uploads a file to the materials bucket (private, served at /f/<path>), under the event's folder (or "standalone"). */
 export async function uploadToStorage(eventId: string | null, file: Blob, name: string) {
   const safe = name.toLowerCase().replace(/[^a-z0-9.]+/g, "-").slice(-60);
   const path = `${eventId ?? "standalone"}/${crypto.randomUUID()}-${safe}`;
   const { error } = await supabaseBrowser().storage.from("materials").upload(path, file, { contentType: file.type || undefined, upsert: false });
   if (error) throw error;
   return path;
+}
+
+/**
+ * Deletes files from the materials bucket, 100 at a time, trying a batch twice. Returns false when
+ * storage could not be reached or answered with an error. Files the database rules do not let the
+ * caller delete (still used by an item they cannot edit) are skipped without an error.
+ */
+export async function removeFiles(paths: (string | null | undefined)[]): Promise<boolean> {
+  const files = [...new Set(paths.filter((x): x is string => !!x && !/^https?:\/\//.test(x)))];
+  let ok = true;
+  for (let i = 0; i < files.length; i += 100) {
+    const part = files.slice(i, i + 100);
+    let failed = true;
+    for (let attempt = 0; attempt < 2 && failed; attempt++) {
+      try { failed = !!(await supabaseBrowser().storage.from("materials").remove(part)).error; } catch { failed = true; }
+    }
+    if (failed) ok = false;
+  }
+  return ok;
 }
 
 export function kindOf(f: File): MaterialKind {

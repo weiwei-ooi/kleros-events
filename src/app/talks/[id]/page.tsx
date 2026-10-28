@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { getMaterial } from "@/lib/data";
 import { fmtDur, fmtRange } from "@/lib/format";
 import TalkPlayer from "@/components/TalkPlayer";
-import { driveId, fileUrl, youtubeId } from "@/components/MaterialRow";
+import { driveId, fileUrl, linkUrl, youtubeId } from "@/components/MaterialRow";
 import PromoStrip from "@/components/PromoStrip";
 import EventChip from "@/components/studio/EventChip";
 import { currentUser, supabaseServer } from "@/lib/supabase/server";
@@ -53,7 +53,7 @@ export default async function TalkPage({ params }: { params: Promise<{ id: strin
     if (drive) player = <div className="video" data-player><iframe src={`https://drive.google.com/file/d/${drive}/preview`} allow="autoplay; fullscreen" allowFullScreen title={m.title} /></div>;
     else if (yt) { player = <YouTubePlayer id={yt} title={m.title} />; canSeek = true; }
     else if (m.file_path) { player = <MediaPlayer kind="video" src={fileUrl(m.file_path)} title={m.title} />; canSeek = true; }
-    else if (m.url) player = <a className="btn" href={m.url} target="_blank" rel="noopener">Open video ↗</a>;
+    else if (m.url) player = <a className="btn" href={linkUrl(m.url)} target="_blank" rel="noopener">Open video ↗</a>;
   } else if (m.kind === "audio") {
     player = <MediaPlayer kind="audio" src={fileUrl(m.file_path)} title={m.title} />;
     canSeek = true;

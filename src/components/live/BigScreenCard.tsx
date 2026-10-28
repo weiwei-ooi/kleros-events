@@ -5,9 +5,11 @@ import ScreenView, { shortUrl } from "./ScreenView";
 import type { ScreenMode } from "./useScreenMode";
 
 /** Preview of the projector and the join link. The mode switch lives in the console header. */
-export default function BigScreenCard({ title, joinUrl, qr, mode, live, error, questions, fresh }: {
+export default function BigScreenCard({ title, joinUrl, qr, mode, live, error, questions, fresh, approval, approvalSupported, onApproval }: {
   title: string; joinUrl: string; qr: string; mode: ScreenMode;
   live: boolean; error: string; questions: Question[]; fresh: Set<string>;
+  /** the screen shows only questions a host approved; the switch shows once the database has it (0014) */
+  approval: boolean; approvalSupported: boolean; onApproval: (on: boolean) => void;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -34,6 +36,16 @@ export default function BigScreenCard({ title, joinUrl, qr, mode, live, error, q
       </div>
 
       <p className="muted small bs-help">The Open big screen button at the top opens this view in a new window. Drag it to the projector, then double-click it for full screen.</p>
+
+      {approvalSupported && <label className="bs-approval">
+        <input type="checkbox" checked={approval} onChange={(e) => onApproval(e.target.checked)} />
+        <span>
+          <b>Only approved questions on the big screen</b>
+          <span className="muted small">{approval
+            ? "Only questions a host approved go on the big screen. Questions from this event's hosts, and any question put on the big screen, count as approved. Phones and the event page still show every question as soon as it is sent; use Hide to remove one."
+            : "Every open question can appear on the big screen as soon as it is sent."}</span>
+        </span>
+      </label>}
 
       <div className="bs-join">
         <span className="lbl">Join link for phones</span>

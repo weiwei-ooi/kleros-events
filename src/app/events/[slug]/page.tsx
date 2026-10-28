@@ -5,7 +5,7 @@ import { getEvent, eventCounts } from "@/lib/data";
 import { fmtRange, isPast, place } from "@/lib/format";
 import { ROLE_LABEL, productsFor } from "@/lib/kleros";
 import { EventCover, RolePill, statusLabel } from "@/components/EventCard";
-import MaterialRow, { MATERIAL_GROUPS, TalkCard, isTalkLike } from "@/components/MaterialRow";
+import MaterialRow, { MATERIAL_GROUPS, TalkCard, isTalkLike, linkUrl } from "@/components/MaterialRow";
 import AttendanceButtons from "@/components/AttendanceButtons";
 import AskTheSpeaker from "@/components/AskTheSpeaker";
 import MeetingForm from "@/components/MeetingForm";
@@ -187,7 +187,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
                 {team.filter((t) => t.team_members).map(({ team_members: m, part }) => (
                   <div key={m.id} className="person">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <span className="av">{m.avatar_url ? <img src={m.avatar_url} alt="" /> : m.name[0]}</span>
+                    <span className="av">{m.avatar_url ? <img src={linkUrl(m.avatar_url)} alt="" /> : m.name[0]}</span>
                     <span className="who">
                       <b>{m.name}</b>
                       {(part || m.title) && <span className="muted">{part || m.title}</span>}

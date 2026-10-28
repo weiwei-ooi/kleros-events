@@ -26,7 +26,11 @@ function suggestions(path: string) {
  * pages (and a reload, within the tab), and belongs to one account: signing out or switching
  * accounts starts a new one, so nobody sees answers drawn from someone else's access.
  */
-export default function AskWidget({ enabled, signedIn, account }: { enabled: boolean; signedIn: boolean; account: string }) {
+export default function AskWidget({ enabled, signedIn, account, note }: {
+  enabled: boolean; signedIn: boolean; account: string;
+  /** for the team, while only the team can ask: what is missing */
+  note?: string;
+}) {
   const path = usePathname();
   const [open, setOpen] = useState(false);
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -186,10 +190,11 @@ export default function AskWidget({ enabled, signedIn, account }: { enabled: boo
           }}>
             {!enabled ? (
               <div className="note small">
-                The assistant is not switched on yet. An admin adds an Anthropic key as ANTHROPIC_API_KEY to the site&apos;s environment variables (on Vercel or Netlify) and redeploys. Only the team sees this button until then.
+                The assistant is not switched on yet. An admin adds an Anthropic key as ANTHROPIC_API_KEY to the site&apos;s environment variables (on Vercel or Netlify) and redeploys. Only the team sees this button until then. To open it to everyone else, the site also needs SUPABASE_SERVICE_ROLE_KEY and migration 0014_security.sql (see the README, under Site assistant).
               </div>
             ) : turns.length === 0 && !busy ? (
               <div className="ask-empty">
+                {note && <div className="note small">{note}</div>}
                 <p className="muted small">Ask about Kleros events, talks and recordings. {signedIn ? "Answers include everything your account can see." : "Answers cover what is public on this site."}</p>
                 <div className="ask-chips">
                   {suggestions(path).map((s) => <button key={s} type="button" className="ask-chip" onClick={(e) => {

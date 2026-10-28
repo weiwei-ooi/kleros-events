@@ -19,6 +19,7 @@ export async function middleware(request: NextRequest) {
   return response;
 }
 
+// /f/ (stored files) refreshes the session itself, once per file instead of twice.
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|pdf|mjs)$).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|f/|.*\\.(?:svg|png|jpg|pdf|mjs)$).*)"],
 };

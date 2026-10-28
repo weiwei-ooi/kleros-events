@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import TalkStage from "./TalkStage";
 import { openPdf, type PdfDoc } from "@/lib/pdf";
+import { retryMedia, trackPlaying } from "@/lib/mediaRetry";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import type { SlideMark } from "@/lib/types";
 
@@ -30,7 +31,13 @@ export default function TalkPlayer({ materialId, pdfUrl, audioUrl, marks, notes,
     if (data.user) await sb.from("talk_progress").upsert({ user_id: data.user.id, material_id: materialId, position_seconds: Math.floor(t), finished: ended, updated_at: new Date().toISOString() });
   }
 
-  if (err) return <div className="note">Couldn&apos;t load the slides. <a href={pdfUrl} target="_blank" rel="noopener">Open the PDF</a> instead.</div>;
+  // without the slides the recording still plays
+  if (err) return (
+    <>
+      <div className="note">Couldn&apos;t load the slides. <a href={pdfUrl} target="_blank" rel="noopener">Open the PDF</a> instead.</div>
+      {audioUrl && <audio ref={(n) => { if (n) trackPlaying(n); }} controls preload="metadata" src={audioUrl} style={{ width: "100%" }} onError={(e) => retryMedia(e.currentTarget)} />}
+    </>
+  );
   return (
     <>
       {resume > 0 && <div className="ok">Picking up where you left off.</div>}

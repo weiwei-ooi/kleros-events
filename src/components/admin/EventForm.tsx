@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { removeFiles } from "@/lib/materials-client";
 import { EVENT_TYPES, REGIONS, ROLE_LABEL, TOPICS } from "@/lib/kleros";
 import { slugify } from "@/lib/format";
 import type { EventRow, KlerosRole } from "@/lib/types";
@@ -68,12 +69,16 @@ export default function EventForm({ event, me }: { event?: EventRow; me?: { isTe
     if (!confirmDel) { setConfirmDel(true); return; }
     const sb = supabaseBrowser();
     // a private event's uploaded files go with it, except files of items also on another event
-    // (the database deletes the items that belong to this event alone)
+    // (the database deletes the items that belong to this event alone). Files first: once the event
+    // is gone, what is left in its folder can only be deleted from the Supabase dashboard, so the
+    // event stays until its files are gone.
     if (event.visibility === "private") {
       const { data: files, error: fErr } = await sb.rpc("private_event_files", { p_event: event.id });
       if (fErr) { setErr(fErr.message); return; }
-      const paths = (files ?? []) as string[];
-      for (let i = 0; i < paths.length; i += 100) await sb.storage.from("materials").remove(paths.slice(i, i + 100));
+      if (!(await removeFiles((files ?? []) as string[]))) {
+        setErr("Some of the event's files could not be deleted from storage, so the event is still here. Try again in a minute.");
+        setConfirmDel(false); return;
+      }
     }
     const { data, error } = await sb.from("events").delete().eq("id", event.id).select("id");
     if (error) { setErr(error.message); return; }

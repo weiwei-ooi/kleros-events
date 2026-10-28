@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Instrument_Serif, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "./styles/console.css";
@@ -31,7 +32,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SiteHeader />
         <main>{children}</main>
         <SiteFooter />
-        <AskLauncher />
+        {/* checks the question counter (up to 2 s) without holding up the page */}
+        <Suspense fallback={null}><AskLauncher /></Suspense>
       </body>
     </html>
   );

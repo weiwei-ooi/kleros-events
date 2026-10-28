@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { authorOf, byTop } from "@/lib/useQuestions";
+import { authorOf, byTop, screenOk } from "@/lib/useQuestions";
 import type { Question } from "@/lib/types";
 import type { ScreenMode } from "./useScreenMode";
 
@@ -25,9 +25,13 @@ function Url({ url }: { url: string }) {
 
 const MAX = 5;
 
-/** What the projector shows: the featured question alone, or the top open ones (a fresh arrival always gets a slot). */
+/**
+ * What the projector shows: the featured question alone, or the top open ones (a fresh arrival always
+ * gets a slot). Only questions the screen may show count: when the event asks for approval, the ones a
+ * host approved (the database decides, in question_scores.screen_ok).
+ */
 export function pickForScreen(questions: Question[], fresh: Set<string>) {
-  const open = questions.filter((q) => q.status === "open").sort(byTop);
+  const open = questions.filter((q) => q.status === "open" && screenOk(q)).sort(byTop);
   const featured = open.find((q) => q.featured) ?? null;
   let list = open.slice(0, MAX);
   const newest = open.filter((q) => fresh.has(q.id) && !list.includes(q));
@@ -110,7 +114,7 @@ export default function ScreenView({ title, joinUrl, qr, mode, questions, fresh,
           ) : (
             <section className="scr-empty">
               <div className="scr-eyebrow">Questions for the speakers</div>
-              <p>Scan the code to ask the first question.</p>
+              <p>Scan the code to ask a question.</p>
             </section>
           )}
         </div>

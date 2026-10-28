@@ -1,65 +1,48 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { ensureUser, supabaseBrowser } from "@/lib/supabase/client";
+import { authorOf, byNew, byTop, useQuestions } from "@/lib/useQuestions";
+import { qaError } from "@/lib/qaErrors";
 import type { Question } from "@/lib/types";
 
 export default function AskTheSpeaker({ eventId, signedIn, isTeam, displayName, slug }: { eventId: string; signedIn: boolean; isTeam: boolean; displayName: string; slug: string }) {
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [myVotes, setMyVotes] = useState<Set<string>>(new Set());
-  const [uid, setUid] = useState<string | null>(null);
+  // the same live list as the phone page: realtime filtered to this event, reloads gathered and spread out
+  const { questions, myVotes, uid, reload } = useQuestions(eventId, { poll: false });
   const [body, setBody] = useState("");
   const [anon, setAnon] = useState(false);
   const [guestName, setGuestName] = useState("");
   const [sort, setSort] = useState<"top" | "new">("top");
   const [err, setErr] = useState("");
 
-  const load = useCallback(async () => {
-    const sb = supabaseBrowser();
-    const { data } = await sb.from("question_scores").select("*").eq("event_id", eventId);
-    setQuestions((data ?? []) as Question[]);
-    const { data: u } = await sb.auth.getUser();
-    if (u.user) {
-      setUid(u.user.id);
-      const { data: v } = await sb.from("question_votes").select("question_id").eq("user_id", u.user.id);
-      setMyVotes(new Set((v ?? []).map((r: { question_id: string }) => r.question_id)));
-    }
-  }, [eventId]);
-
-  useEffect(() => {
-    load();
-    const sb = supabaseBrowser();
-    // votes cannot be filtered by event, so reload once 1.5 s after the last vote anywhere
-    let voteTimer: ReturnType<typeof setTimeout> | undefined;
-    const onVote = () => { clearTimeout(voteTimer); voteTimer = setTimeout(load, 1500); };
-    const ch = sb.channel(`qa-${eventId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "questions", filter: `event_id=eq.${eventId}` }, load)
-      .on("postgres_changes", { event: "*", schema: "public", table: "question_votes" }, onVote)
-      .subscribe();
-    return () => { sb.removeChannel(ch); clearTimeout(voteTimer); };
-  }, [eventId, load]);
-
   async function ask(e: React.FormEvent) {
     e.preventDefault(); setErr("");
     const sb = supabaseBrowser();
-    let me = uid;
-    try { me = (await ensureUser()).id; setUid(me); } catch (x) { setErr((x as Error).message); return; }
-    const named = !anon && (signedIn ? displayName : guestName.trim()).slice(0, 60);
-    // no automatic upvote of one's own question: votes are public, so it would reveal who asked
+    let me: string;
+    try { me = (await ensureUser()).id; } catch (x) { setErr(qaError(x)); return; }
+    const named = !anon && (signedIn ? displayName : guestName).trim().slice(0, 60);
+    // no automatic upvote of one's own question: the list counts other people's votes
     const { error } = await sb.from("questions").insert({ event_id: eventId, body: body.trim(), anonymous: !named, author_id: me, author_name: named || null });
-    if (error) { setErr(error.message); return; }
-    setBody(""); load();
+    if (error) {
+      // a signed-in account asks under its display name, so the fix is there, not in a name field
+      setErr(error.code === "PT422" && signedIn && named
+        ? "Your display name is reserved on this site. Change it on My events, or tick Ask anonymously."
+        : qaError(error));
+      return;
+    }
+    setBody(""); reload();
   }
   async function vote(q: Question) {
     let me = uid;
-    if (!me) { try { me = (await ensureUser()).id; setUid(me); } catch (x) { setErr((x as Error).message); return; } }
+    if (!me) { try { me = (await ensureUser()).id; } catch (x) { setErr(qaError(x)); return; } }
     const sb = supabaseBrowser();
-    if (myVotes.has(q.id)) await sb.from("question_votes").delete().eq("question_id", q.id).eq("user_id", me);
-    else await sb.from("question_votes").insert({ question_id: q.id, user_id: me });
-    load();
+    const { error } = myVotes.has(q.id)
+      ? await sb.from("question_votes").delete().eq("question_id", q.id).eq("user_id", me)
+      : await sb.from("question_votes").insert({ question_id: q.id, user_id: me });
+    setErr(error ? qaError(error) : "");
+    reload();
   }
-  const list = questions.filter((q) => q.status !== "hidden").sort((a, b) =>
-    sort === "new" ? b.created_at.localeCompare(a.created_at) : Number(a.status === "answered") - Number(b.status === "answered") || b.votes - a.votes);
+  const list = questions.filter((q) => q.status !== "hidden").sort(sort === "new" ? byNew : byTop);
 
   return (
     <div className="stack">
@@ -81,7 +64,7 @@ export default function AskTheSpeaker({ eventId, signedIn, isTeam, displayName, 
           <button className={`vote ${myVotes.has(q.id) ? "on" : ""}`} onClick={() => vote(q)} aria-label="Upvote">▲<span>{q.votes}</span></button>
           <div style={{ minWidth: 0 }}>
             <div style={{ overflowWrap: "anywhere" }}>{q.body}</div>
-            <div className="by">{q.anonymous || !q.author_name ? "Anonymous" : q.author_name}{q.featured ? " · on screen" : ""}{q.status === "answered" ? " · answered" : ""}</div>
+            <div className="by">{authorOf(q)}{q.featured ? " · on screen" : ""}{q.status === "answered" ? " · answered" : ""}</div>
           </div>
         </div>
       ))}

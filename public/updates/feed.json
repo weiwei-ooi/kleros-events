@@ -1,5 +1,5 @@
 {
-  "about": "Updates for kleros-events.vercel.app found on Kleros socials and team channels. Format: docs/social-feed.md. Applied hourly by sync_feed() in Supabase.",
+  "about": "Updates for the Kleros events site found on Kleros socials and team channels. Format and rules, including https-only links: docs/social-feed.md. Applied hourly by sync_feed() in Supabase.",
   "items": [
     {
       "id": "2026-10-27-x-2113020717965123759",

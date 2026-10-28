@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useQuestions } from "@/lib/useQuestions";
+import { screenOk, useQuestions } from "@/lib/useQuestions";
 import ScreenView, { useQr } from "./ScreenView";
 import { useScreenMode } from "./useScreenMode";
 
@@ -26,10 +26,11 @@ export function useFresh(ids: string[] | null, ms = 8000) {
 
 // The projector window: no controls. Double-click toggles full screen; the cursor hides when still.
 export default function ScreenPage({ eventId, title, joinUrl }: { eventId: string; title: string; joinUrl: string }) {
-  const { questions, reload, loaded } = useQuestions(eventId);
+  const { questions, reload, loaded } = useQuestions(eventId, { quick: true });
   const { mode } = useScreenMode(eventId, reload);
   const qr = useQr(joinUrl);
-  const fresh = useFresh(loaded ? questions.map((q) => q.id) : null);
+  // "new" means new to the screen: a question the host just approved counts too
+  const fresh = useFresh(loaded ? questions.filter(screenOk).map((q) => q.id) : null);
   const [still, setStill] = useState(false);
   const [hint, setHint] = useState(true);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);

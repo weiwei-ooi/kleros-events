@@ -3,7 +3,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import type { Material } from "@/lib/types";
-import { fileUrl } from "../MaterialRow";
+import { fileUrl, linkUrl } from "../MaterialRow";
+import { removeFiles } from "@/lib/materials-client";
 
 type Rec = Pick<Material, "id" | "kind" | "url" | "pdf_path" | "audio_path" | "file_path" | "pages">;
 
@@ -21,8 +22,10 @@ export default function RecordingSlides({ m, canEdit }: { m: Rec; canEdit: boole
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
   const [armed, setArmed] = useState(false);
-  const url = m.url && /^https?:\/\//.test(m.url) ? m.url : "";
-  const gs = url ? googleSlidesId(url) : undefined;
+  const stored = m.url && /^https?:\/\//.test(m.url) ? m.url : "";
+  // an old public file address opens through /f/
+  const url = linkUrl(stored);
+  const gs = stored ? googleSlidesId(stored) : undefined;
 
   function openSide() {
     const w = Math.round(window.screen.availWidth * 0.62), h = Math.round(window.screen.availHeight * 0.85);
@@ -56,12 +59,13 @@ export default function RecordingSlides({ m, canEdit }: { m: Rec; canEdit: boole
       .eq("id", m.id).select("id").single();
     if (error) { setBusy(""); setErr(`Nothing changed: ${error.message}`); return; }
     // the file goes too, unless another item uses it
+    let fileGone = true;
     if (old && !/^https?:\/\//.test(old)) {
       const uses = await Promise.all((["file_path", "pdf_path", "audio_path"] as const).map((c) =>
         sb.from("materials").select("id", { count: "exact", head: true }).eq(c, old)));
-      if (uses.every((r) => !r.error && !r.count)) await sb.storage.from("materials").remove([old]);
+      if (uses.every((r) => !r.error && !r.count)) fileGone = await removeFiles([old]);
     }
-    setBusy(""); setMsg("The PDF is off. The recording plays as audio.");
+    setBusy(""); setMsg(fileGone ? "The PDF is off. The recording plays as audio." : "The PDF is off. The recording plays as audio. The PDF file could not be deleted from storage.");
     router.refresh();
   }
 
@@ -89,7 +93,7 @@ export default function RecordingSlides({ m, canEdit }: { m: Rec; canEdit: boole
           <form className="stack" onSubmit={saveLink}>
             <div className="field">
               <label htmlFor={`rs-${m.id}`}>Link to the slides</label>
-              <input id={`rs-${m.id}`} name="slides_url" type="url" defaultValue={url} placeholder="https://claude.ai/artifact/…, Google Slides, Pitch…" />
+              <input id={`rs-${m.id}`} name="slides_url" type="url" defaultValue={stored} placeholder="https://claude.ai/artifact/…, Google Slides, Pitch…" />
               <span className="muted small">Shown above the recording. Leave empty and save to remove it.</span>
             </div>
             <div className="row-flex"><button className="btn sm primary" type="submit" disabled={!!busy}>{busy || "Save link"}</button></div>

@@ -2,17 +2,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ensureUser, supabaseBrowser } from "@/lib/supabase/client";
-import { ago, authorOf, byNew, byTop, useQuestions } from "@/lib/useQuestions";
+import { ago, authorOf, awaitingApproval, byNew, byTop, useQuestions } from "@/lib/useQuestions";
+import { qaError } from "@/lib/qaErrors";
 import type { Question } from "@/lib/types";
 
 const MAX = 280;
-
-function friendly(e: unknown) {
-  const m = (e as Error)?.message || "";
-  if (/anonymous/i.test(m) && /disabled|not enabled/i.test(m)) return "Guest questions are switched off for this site right now. Sign in to ask.";
-  if (/fetch|network/i.test(m)) return "No connection. Check the wifi and try again.";
-  return m || "Something went wrong. Try again.";
-}
 
 // What people land on after scanning the QR on the big screen: ask in one tap, no account.
 export default function QuickAsk({ eventId, title, slug }: { eventId: string; title: string; slug: string }) {
@@ -37,14 +31,14 @@ export default function QuickAsk({ eventId, title, slug }: { eventId: string; ti
     try {
       const me = await ensureUser();
       const sb = supabaseBrowser();
-      // no automatic upvote of one's own question: votes are public, so it would reveal who asked
+      // no automatic upvote of one's own question: the list counts other people's votes
       const { error } = await sb.from("questions")
         .insert({ event_id: eventId, body: text, anonymous: !name.trim(), author_id: me.id, author_name: name.trim().slice(0, 60) || null });
       if (error) throw error;
       try { localStorage.setItem("ke-ask-name", name.trim()); } catch { /* storage blocked */ }
       setBody(""); setSent(true); setTimeout(() => setSent(false), 5000);
       reload();
-    } catch (x) { setErr(friendly(x)); }
+    } catch (x) { setErr(qaError(x)); }
     setBusy(false);
   }
 
@@ -58,7 +52,7 @@ export default function QuickAsk({ eventId, title, slug }: { eventId: string; ti
         : await sb.from("question_votes").insert({ question_id: q.id, user_id: me.id });
       if (error) throw error;
       reload();
-    } catch (x) { setErr(friendly(x)); }
+    } catch (x) { setErr(qaError(x)); }
     setVoting("");
   }
 
@@ -80,8 +74,10 @@ export default function QuickAsk({ eventId, title, slug }: { eventId: string; ti
         <span className={`qa-count ${left < 30 ? "low" : ""}`} aria-live="polite">{left} {left === 1 ? "character" : "characters"} left</span>
         <input className="qa-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name (optional)" maxLength={40} aria-label="Your name, optional" autoComplete="name" />
         <button className="btn primary qa-send" type="submit" disabled={busy || body.trim().length < 3}>{busy ? "Sending…" : "Send question"}</button>
-        <p className="muted small qa-fine">No account needed. Leave the name empty to ask anonymously.</p>
-        {sent && <div className="ok" role="status">Sent. It is in the list below and on the big screen.</div>}
+        <p className="muted small qa-fine">No account needed. Leave the name empty to ask anonymously.{
+          // the guest mark comes with 0014; before that questions have no guest field
+          (!questions.length || questions.some((q) => q.guest !== undefined)) && " Without an account, the name shows with “(guest)” after it."}</p>
+        {sent && <div className="ok" role="status">Sent. It is in the list below.</div>}
         {err && <div className="note" role="alert">{err}</div>}
       </form>
 
@@ -109,12 +105,13 @@ export default function QuickAsk({ eventId, title, slug }: { eventId: string; ti
                     {authorOf(q)}{mine ? " (you)" : ""} · {ago(q.created_at, now)}
                     {q.featured && <span className="pill host">On screen now</span>}
                     {q.status === "answered" && <span className="pill plain">Answered</span>}
+                    {mine && awaitingApproval(q) && <span className="pill plain">Not on the big screen yet</span>}
                   </div>
                 </div>
               </article>
             );
           })}
-          {loaded && !list.length && <div className="empty"><b>No questions yet</b>Questions appear here and on the big screen as soon as they are sent.</div>}
+          {loaded && !list.length && <div className="empty"><b>No questions yet</b>New questions show up here within a few seconds.</div>}
           {!loaded && <div className="muted small">Loading questions…</div>}
         </div>
       </section>
