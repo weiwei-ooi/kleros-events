@@ -216,7 +216,7 @@ async function summariseWithChat(kind: "groq" | "openai", info: TalkInfo, segs: 
   const merged = mergeSummaries(parts);
   try {
     const out = await chatJson(kind, SUMMARY_SYSTEM,
-      `<talk>\nTitle: ${info.title}\nSpeaker(s): ${info.speaker || "not given"}\n</talk>\n\nThese are summaries of consecutive parts of one talk, as JSON. Merge them into one summary of the whole talk: one tl;dr, 4 to 8 key points without repeats, 3 to 10 chapters in order, up to 4 quotes, and all audience questions. Keep the times exactly as given.\n\n<parts>\n${JSON.stringify(parts)}\n</parts>`);
+      `<talk>\nTitle: ${info.title}\nSpeaker(s): ${info.speaker || "not given"}\n</talk>\n\nThese are summaries of consecutive parts of one talk, as JSON. Merge them into one summary of the whole talk: one tl;dr, 4 to 8 key points without repeats, 3 to 10 chapters in order, up to 4 quotes, all audience questions and all action items without repeats. Keep the times exactly as given.\n\n<parts>\n${JSON.stringify(parts)}\n</parts>`);
     return { summary: normaliseSummary(out, segs), provider: `${kind}:${model} (${chunks.length} parts)` };
   } catch {
     return { summary: normaliseSummary({ ...merged, tldr: parts[0].tldr, key_points: merged.key_points.slice(0, 8) }, segs), provider: `${kind}:${model} (${chunks.length} parts, merged locally)` };

@@ -136,6 +136,23 @@ function SummaryCard({ s, title, timed, seekable }: { s: Summary; title: string;
           </nav>
         )}
       </div>
+      {s.action_items?.length ? (
+        <div className="tx-todo">
+          <h3 className="tx-sub">Action items</h3>
+          <ol>
+            {s.action_items.map((a, i) => (
+              <li key={i} className="tx-todo-row">
+                <Stamp t={a.t} seekable={seekable} timed={timed} />
+                <div>
+                  {a.owner && <b>{a.owner}</b>}
+                  <span>{a.task}</span>
+                  {a.due && <span className="muted small"> · {a.due}</span>}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      ) : null}
       {extra && (
         <details className="tx-more">
           <summary>Quotes{s.audience_questions?.length ? " and audience questions" : ""}</summary>

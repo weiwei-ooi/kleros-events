@@ -344,7 +344,7 @@ async function getTranscript(ctx: ToolContext, input: { material_id: string; fro
     language: row?.language ?? undefined,
     // uploaded plain text has estimated times
     times_are_estimates: row?.provider?.includes("untimed") || undefined,
-    summary: from === 0 && s ? { tldr: s.tldr, key_points: s.key_points, chapters: s.chapters?.map((c) => `${fmtDur(c.t)} ${c.title}`) } : undefined,
+    summary: from === 0 && s ? { tldr: s.tldr, key_points: s.key_points, chapters: s.chapters?.map((c) => `${fmtDur(c.t)} ${c.title}`), action_items: s.action_items?.map((a) => `${fmtDur(a.t)} ${a.owner ? `${a.owner}: ` : ""}${a.task}${a.due ? ` (${a.due})` : ""}`) } : undefined,
     lines_from: fmtDur(segs[startIdx]?.start ?? 0),
     transcript: text,
     ...(i < segs.length

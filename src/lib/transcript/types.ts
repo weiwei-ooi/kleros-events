@@ -11,6 +11,8 @@ export interface Segment {
 export interface Chapter { t: number; title: string }
 export interface Quote { t: number; text: string; speaker?: string }
 export interface AudienceQuestion { t: number; question: string; answer?: string }
+/** A task from a working meeting: what to do, who does it (when the recording makes it clear), by when. */
+export interface ActionItem { t: number; task: string; owner?: string; due?: string }
 
 export interface Summary {
   tldr: string;
@@ -18,6 +20,7 @@ export interface Summary {
   chapters: Chapter[];
   quotes: Quote[];
   audience_questions?: AudienceQuestion[];
+  action_items?: ActionItem[];
 }
 
 export interface TranscriptRow {

@@ -1,11 +1,11 @@
 // Summary prompt, JSON schema and validation. Pure functions, used by the route and tests.
-import type { AudienceQuestion, Chapter, Quote, Segment, Summary } from "./types";
+import type { ActionItem, AudienceQuestion, Chapter, Quote, Segment, Summary } from "./types";
 import { clock } from "./parse";
 
 export const SUMMARY_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["tldr", "key_points", "chapters", "quotes", "audience_questions"],
+  required: ["tldr", "key_points", "chapters", "quotes", "audience_questions", "action_items"],
   properties: {
     tldr: { type: "string", description: "Two or three sentences on what the talk covered." },
     key_points: { type: "array", items: { type: "string" }, description: "4 to 8 concrete takeaways." },
@@ -27,6 +27,18 @@ export const SUMMARY_SCHEMA = {
         properties: { t: { type: "number" }, question: { type: "string" }, answer: { type: "string", description: "Short summary of the reply; empty string when none." } },
       },
     },
+    action_items: {
+      type: "array",
+      items: {
+        type: "object", additionalProperties: false, required: ["t", "task", "owner", "due"],
+        properties: {
+          t: { type: "number" },
+          task: { type: "string" },
+          owner: { type: "string", description: "Empty string when the recording does not make it clear." },
+          due: { type: "string", description: "When it is due, as said in the recording; empty string when not said." },
+        },
+      },
+    },
   },
 } as const;
 
@@ -44,6 +56,7 @@ Rules:
 - key_points: 4 to 8 concrete takeaways with specifics (numbers, mechanisms, examples, product names) rather than vague claims.
 - quotes: up to 4 short verbatim sentences worth quoting, cleaned of filler words ("um", "you know") but otherwise exact. speaker only when the transcript or the provided speaker field makes it certain; otherwise an empty string.
 - audience_questions: questions from the audience or the host, if the recording has a Q&A, with a one sentence summary of the answer; an empty list when there is none.
+- action_items: only for a working meeting (a team call, briefing or planning session): the tasks people agreed to do or were asked to do, each as a short instruction starting with a verb, at the time it was agreed. owner only when the recording makes clear who takes it; due only when a day or date is said. An empty list for a talk or panel.
 - Voice: neutral third person, like an editor writing a programme note ("The talk covers...", "Ast argues..."). No first person (I, we, our), no second person sales tone, no exclamation marks, no em dashes (use commas, colons or full stops), no hashtags, no marketing words (revolutionary, game-changer, cutting-edge, leverage, best-in-class, synergy).
 - Accuracy: only names that are given in the talk details or clearly spoken; do not guess who someone is. Spell Kleros product names as Kleros Court, Curate, Scout, Escrow, Proof of Humanity, PNK, Agentic Commerce Court when they are clearly meant. If a passage is unclear, leave it out rather than guess. No financial or investment framing, no price talk about PNK, and do not describe jurors as employees of Kleros.`;
 
@@ -142,7 +155,17 @@ export function normaliseSummary(input: unknown, segs: Segment[]): Summary {
     .filter((q) => q.question)
     .slice(0, 12);
 
-  return { tldr, key_points, chapters, quotes, ...(audience_questions.length ? { audience_questions } : {}) };
+  const action_items: ActionItem[] = arr(o.action_items ?? o.actionItems)
+    .map((a) => {
+      const r = a as ActionItem;
+      const owner = tidyText(r?.owner), due = tidyText(r?.due);
+      return { t: snap(num(r?.t), starts, max), task: tidyText(typeof a === "string" ? a : r?.task), ...(owner ? { owner } : {}), ...(due ? { due } : {}) };
+    })
+    .filter((a) => a.task)
+    .sort((a, b) => a.t - b.t)
+    .slice(0, 60);
+
+  return { tldr, key_points, chapters, quotes, ...(audience_questions.length ? { audience_questions } : {}), ...(action_items.length ? { action_items } : {}) };
 }
 
 /** Splits segments into prompt-sized chunks (by characters) for models with small context windows. */
@@ -166,6 +189,7 @@ export function mergeSummaries(parts: Summary[]): Summary {
     chapters: parts.flatMap((p) => p.chapters).sort((a, b) => a.t - b.t),
     quotes: parts.flatMap((p) => p.quotes),
     audience_questions: parts.flatMap((p) => p.audience_questions ?? []),
+    action_items: parts.flatMap((p) => p.action_items ?? []),
   };
 }
 
@@ -175,6 +199,7 @@ export function summaryText(s: Summary, title: string, timed = true): string {
   const parts = [title, "", s.tldr, ""];
   if (s.key_points.length) parts.push("Key points", ...s.key_points.map((k) => `- ${k}`), "");
   if (s.chapters.length) parts.push("Chapters", ...s.chapters.map((c) => `${at(c.t)}${c.title}`), "");
+  if (s.action_items?.length) parts.push("Action items", ...s.action_items.map((a) => `- ${at(a.t)}${a.owner ? `${a.owner}: ` : ""}${a.task}${a.due ? ` (${a.due})` : ""}`), "");
   if (s.quotes.length) parts.push("Quotes", ...s.quotes.map((q) => `${at(q.t)}"${q.text}"${q.speaker ? `, ${q.speaker}` : ""}`), "");
   if (s.audience_questions?.length) parts.push("Audience questions", ...s.audience_questions.map((q) => `${at(q.t)}${q.question}${q.answer ? `\n  ${q.answer}` : ""}`), "");
   return parts.join("\n").trim() + "\n";
