@@ -228,6 +228,24 @@
       "title": "William George recaps his talk on 51% attacks (Kleros Community Call, 14 May 2025)",
       "speaker": "William George",
       "url": "https://www.youtube.com/watch?v=0sW3QgNfH4I&t=983s"
+    },
+    {
+      "id": "2026-10-28-luma-qewnqhas",
+      "kind": "event",
+      "source": "https://luma.com/qewnqhas",
+      "event": {
+        "slug": "ground-truth-mumbai",
+        "description": "A Devcon 8 side event in Mumbai (BKC). It is separate from Devcon, so no Devcon ticket is needed. A networking dinner on queryable onchain data, prediction markets, agent infrastructure and onchain justice, co-hosted by Kleros with Arkiv Network (by Golem Network) and Web3 Mumbai. Programme (IST): doors open at 18:00, the three hosts give a welcome toast at 18:45, and at 19:00 Kleros and Arkiv hold a fireside chat, \"Truth for Machines: Who keeps the record, who settles the dispute?\", on how agents and markets share data, build identity and reputation, and resolve disputes. Dinner and open networking follow at 19:30, the results of the evening's prediction market are announced at 21:15, and the event closes at 22:00. Free to attend; the hosts approve registrations. Wei Wei Ooi is a Luma co-host."
+      }
+    },
+    {
+      "id": "2026-10-28-yt-f8Y6EduCQR0",
+      "kind": "material",
+      "source": "https://www.youtube.com/shorts/f8Y6EduCQR0",
+      "event_slug": "who-judges-the-machines-buenos-aires-2026",
+      "material_kind": "video",
+      "title": "¿Quién juzga a las máquinas? El evento en dos minutos (two-minute recap, Spanish)",
+      "url": "https://www.youtube.com/shorts/f8Y6EduCQR0"
     }
   ]
 }
