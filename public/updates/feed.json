@@ -246,6 +246,34 @@
       "material_kind": "video",
       "title": "¿Quién juzga a las máquinas? El evento en dos minutos (two-minute recap, Spanish)",
       "url": "https://www.youtube.com/shorts/f8Y6EduCQR0"
+    },
+    {
+      "id": "2026-10-29-x-2112586513057759449",
+      "kind": "material",
+      "source": "https://x.com/labs_compass/status/2112586513057759449",
+      "event_slug": "banking-the-agent-economy-singapore-2026",
+      "material_kind": "image",
+      "title": "Organiser recap with four photos: Compass Labs on Banking the Agent Economy",
+      "url": "https://x.com/labs_compass/status/2112586513057759449"
+    },
+    {
+      "id": "2026-10-29-yt-RhsZqGwV-d8",
+      "kind": "material",
+      "source": "https://www.youtube.com/watch?v=RhsZqGwV-d8",
+      "event_slug": "who-judges-the-machines-buenos-aires-2026",
+      "material_kind": "video",
+      "title": "Federico Ast looks back on the event the day after (Kleros Live Stream, 21 Oct 2026)",
+      "speaker": "Federico Ast",
+      "url": "https://www.youtube.com/watch?v=RhsZqGwV-d8"
+    },
+    {
+      "id": "2026-10-29-x-2112234719668547718",
+      "kind": "material",
+      "source": "https://x.com/Kleros_io/status/2112234719668547718",
+      "event_slug": "the-future-is-tradable",
+      "material_kind": "social",
+      "title": "Last Week in Kleros (video roundup, 19 Oct 2026): Clément Lesaege on markets as an information layer, Juan Ramiro Garza on who decides what happened",
+      "url": "https://x.com/Kleros_io/status/2112234719668547718"
     }
   ]
 }
