@@ -274,6 +274,204 @@
       "material_kind": "social",
       "title": "Last Week in Kleros (video roundup, 19 Oct 2026): Clément Lesaege on markets as an information layer, Juan Ramiro Garza on who decides what happened",
       "url": "https://x.com/Kleros_io/status/2112234719668547718"
+    },
+    {
+      "id": "2026-11-02-yt-4YjrPANf41E",
+      "kind": "material",
+      "source": "https://www.youtube.com/watch?v=4YjrPANf41E",
+      "event_slug": "the-future-is-tradable",
+      "material_kind": "video",
+      "title": "From Event Markets to Information Finance (YouTube)",
+      "speaker": "Clément Lesaege",
+      "url": "https://www.youtube.com/watch?v=4YjrPANf41E"
+    },
+    {
+      "id": "2026-11-02-yt-Kk_xXhe3sYY",
+      "kind": "material",
+      "source": "https://www.youtube.com/watch?v=Kk_xXhe3sYY",
+      "event_slug": "the-future-is-tradable",
+      "material_kind": "video",
+      "title": "Paid to Be Right (YouTube)",
+      "speaker": "Clément Lesaege",
+      "url": "https://www.youtube.com/watch?v=Kk_xXhe3sYY"
+    },
+    {
+      "id": "2026-11-02-yt-sns9gqEQuX8",
+      "kind": "material",
+      "source": "https://www.youtube.com/watch?v=sns9gqEQuX8",
+      "event_slug": "the-future-is-tradable",
+      "material_kind": "video",
+      "title": "Prediction Market Basics (YouTube)",
+      "speaker": "Devansh Mehta",
+      "url": "https://www.youtube.com/watch?v=sns9gqEQuX8"
+    },
+    {
+      "id": "2026-11-02-yt-ZnUqTTYEz9g",
+      "kind": "material",
+      "source": "https://www.youtube.com/watch?v=ZnUqTTYEz9g",
+      "event_slug": "the-future-is-tradable",
+      "material_kind": "video",
+      "title": "Creating an AI Skill to Trade on Seer (YouTube; audio with captions, the demo screen was not captured)",
+      "speaker": "Mohammad Pouramiri",
+      "url": "https://www.youtube.com/watch?v=ZnUqTTYEz9g"
+    },
+    {
+      "id": "2026-11-02-yt-RqUaahNPWks",
+      "kind": "material",
+      "source": "https://www.youtube.com/watch?v=RqUaahNPWks",
+      "event_slug": "the-future-is-tradable",
+      "material_kind": "video",
+      "title": "Who Decides What Happened? (YouTube)",
+      "speaker": "Juan Ramiro Garza",
+      "url": "https://www.youtube.com/watch?v=RqUaahNPWks"
+    },
+    {
+      "id": "2026-11-02-yt-fXJ4URZrO8k",
+      "kind": "material",
+      "source": "https://www.youtube.com/watch?v=fXJ4URZrO8k",
+      "event_slug": "the-future-is-tradable",
+      "material_kind": "video",
+      "title": "Buying Answers, Not Probabilities (YouTube)",
+      "speaker": "distbit",
+      "url": "https://www.youtube.com/watch?v=fXJ4URZrO8k"
+    },
+    {
+      "id": "2026-11-02-yt-PLQE2YsJ_jZgc",
+      "kind": "material",
+      "source": "https://www.youtube.com/playlist?list=PLQE2YsJ_jZgc",
+      "event_slug": "the-future-is-tradable",
+      "material_kind": "link",
+      "title": "YouTube playlist: all six talks from the Kleros and Seer evening",
+      "url": "https://www.youtube.com/playlist?list=PLQE2YsJ_jZgc"
+    },
+    {
+      "id": "2026-11-02-x-2116508771572765092",
+      "kind": "material",
+      "source": "https://x.com/Kleros_io/status/2116508771572765092",
+      "event_slug": "the-future-is-tradable",
+      "material_kind": "social",
+      "title": "Kleros post: the six talks now on YouTube, with a thread linking each one",
+      "url": "https://x.com/Kleros_io/status/2116508771572765092"
+    },
+    {
+      "id": "2026-11-02-x-2116313534061482021",
+      "kind": "material",
+      "source": "https://x.com/Kleros_io/status/2116313534061482021",
+      "event_slug": "devcon-8-mumbai",
+      "material_kind": "social",
+      "title": "Kleros at Devcon 8, the week at a glance: booth Core 02 all week, the Legal & Governance hub Kleros hosts on Thu 5 Nov, and Truth Pays on Wed 4 Nov",
+      "url": "https://x.com/Kleros_io/status/2116313534061482021"
+    },
+    {
+      "id": "2026-11-02-x-2116837989569405092",
+      "kind": "material",
+      "source": "https://x.com/Kleros_io/status/2116837989569405092",
+      "event_slug": "devcon-8-mumbai",
+      "material_kind": "social",
+      "title": "The three Community Hubs Kleros co-hosts (Prediction Markets, Agentic, Legal & Governance): partners and session times",
+      "url": "https://x.com/Kleros_io/status/2116837989569405092"
+    },
+    {
+      "id": "2026-11-02-x-2117130674578805229",
+      "kind": "material",
+      "source": "https://x.com/alex__eth/status/2117130674578805229",
+      "event_slug": "devcon-8-mumbai",
+      "material_kind": "social",
+      "title": "Alexandre (0xAlex) announces his talk 'Futarchy Delegate to solve Voter Apathy' (Gov Hub, Thursday around 16:00)",
+      "speaker": "Alexandre (0xAlex)",
+      "url": "https://x.com/alex__eth/status/2117130674578805229"
+    },
+    {
+      "id": "2026-11-02-x-2116801428593205588",
+      "kind": "material",
+      "source": "https://x.com/Kleros_io/status/2116801428593205588",
+      "event_slug": "devcon-8-mumbai",
+      "material_kind": "social",
+      "title": "Free Kleros tuk-tuk rides around BKC for Devcon wristband holders, 3 to 6 Nov",
+      "url": "https://x.com/Kleros_io/status/2116801428593205588"
+    },
+    {
+      "id": "2026-11-02-yt-KDSsHE3yuIc",
+      "kind": "material",
+      "source": "https://www.youtube.com/watch?v=KDSsHE3yuIc",
+      "event_slug": "devcon-8-mumbai",
+      "material_kind": "video",
+      "title": "Kleros at Devcon preview: community hubs and the Truth Pays side event (Kleros Live Stream, 28 Oct 2026)",
+      "url": "https://www.youtube.com/watch?v=KDSsHE3yuIc&t=139s"
+    },
+    {
+      "id": "2026-11-02-blog-november-2026-scout-incentives-devcon-india-agentic-court-proposal",
+      "kind": "material",
+      "source": "https://blog.kleros.io/november-2026-scout-incentives-devcon-india-agentic-court-proposal/",
+      "event_slug": "devcon-8-mumbai",
+      "material_kind": "link",
+      "title": "Kleros blog, November 2026 update: the Kleros at Devcon India section",
+      "url": "https://blog.kleros.io/november-2026-scout-incentives-devcon-india-agentic-court-proposal/"
+    },
+    {
+      "id": "2026-11-02-x-2116809211506008431",
+      "kind": "material",
+      "source": "https://x.com/Kleros_io/status/2116809211506008431",
+      "event_slug": "ground-truth-mumbai",
+      "material_kind": "social",
+      "title": "How Seer and Kleros decision markets picked this side event, with the programme and how to get in (film)",
+      "url": "https://x.com/Kleros_io/status/2116809211506008431"
+    },
+    {
+      "id": "2026-11-02-x-2116819558866559382",
+      "kind": "material",
+      "source": "https://x.com/Kleros_io/status/2116819558866559382",
+      "event_slug": "ground-truth-mumbai",
+      "material_kind": "social",
+      "title": "Holding a spot with a refundable deposit, and how a disputed attendance list goes to Kleros Court (film)",
+      "url": "https://x.com/Kleros_io/status/2116819558866559382"
+    },
+    {
+      "id": "2026-11-02-yt-KDSsHE3yuIc-t353",
+      "kind": "material",
+      "source": "https://www.youtube.com/watch?v=KDSsHE3yuIc",
+      "event_slug": "ground-truth-mumbai",
+      "material_kind": "video",
+      "title": "Truth Pays preview: deposit-backed spots and markets on attendance, with Arkiv (Kleros Live Stream, 28 Oct 2026)",
+      "url": "https://www.youtube.com/watch?v=KDSsHE3yuIc&t=353s"
+    },
+    {
+      "id": "2026-11-02-x-2116517508584821046",
+      "kind": "material",
+      "source": "https://x.com/Kleros_io/status/2116517508584821046",
+      "event_slug": "onchain-legal-summit-devcon-india",
+      "material_kind": "social",
+      "title": "Who Do You Sue? Federico Ast in a fireside at the Legal Summit (4 Nov, 11:00 IST, Legal & Governance Hub)",
+      "speaker": "Federico Ast",
+      "url": "https://x.com/Kleros_io/status/2116517508584821046"
+    },
+    {
+      "id": "2026-11-02-yt-clmUpyK02M4",
+      "kind": "material",
+      "source": "https://www.youtube.com/shorts/clmUpyK02M4",
+      "event_slug": "who-judges-the-machines-buenos-aires-2026",
+      "material_kind": "video",
+      "title": "Who Judges the Machines? Federico Ast on AI agents and the law (short)",
+      "speaker": "Federico Ast",
+      "url": "https://www.youtube.com/shorts/clmUpyK02M4"
+    },
+    {
+      "id": "2026-11-02-linkedin-7519416491532898305",
+      "kind": "material",
+      "source": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7519416491532898305/",
+      "event_slug": "who-judges-the-machines-buenos-aires-2026",
+      "material_kind": "social",
+      "title": "ALVK LAW attendee recap with photos (Ramiro Gandur)",
+      "url": "https://www.linkedin.com/feed/update/urn:li:ugcPost:7519416491532898305/"
+    },
+    {
+      "id": "2026-11-02-linkedin-7521238658268536832",
+      "kind": "material",
+      "source": "https://www.linkedin.com/feed/update/urn:li:share:7521238658268536832/",
+      "event_slug": "merge-madrid-2026",
+      "material_kind": "social",
+      "title": "Cardano Foundation recap with a photo from the MERGE Madrid panel on agent payments, with Kleros, Mastercard, Tether and the BSV Association",
+      "url": "https://www.linkedin.com/feed/update/urn:li:share:7521238658268536832/"
     }
   ]
 }
