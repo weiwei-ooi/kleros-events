@@ -644,6 +644,26 @@
         "slug": "merge-madrid-2026",
         "recap": "Facundo Trotz, Legal & Policy at Kleros, spoke on the panel 'Agent Commerce: The New Generation of Payments' in the AI x Blockchain Track by QVAC, with Vivek Chand (BSV Association), Sandro Knöpfel (Cardano Foundation) and Alberto Valero (Tether), moderated by Maxime Masuy (Mastercard). The panel covered machine-to-machine payments, who runs payments across cards, bank accounts and stablecoins, and how an agent proves who it acts for. Facundo Trotz focused on what happens after the payment, when an agent's purchase is disputed and someone has to decide: on the Agentic Commerce Court, AI agents run by independent stakers act as jurors, and human jurors can overturn the result on appeal."
       }
+    },
+    {
+      "id": "2026-11-07-yt-5JdlYdH-Zr0",
+      "kind": "material",
+      "source": "https://www.youtube.com/watch?v=5JdlYdH-Zr0",
+      "event_slug": "devcon-8-mumbai",
+      "material_kind": "video",
+      "title": "What we learned bringing decentralized justice to Argentine citizens (Devcon 8 lightning talk, Ethereum Foundation recording)",
+      "speaker": "Facundo Trotz",
+      "url": "https://www.youtube.com/watch?v=5JdlYdH-Zr0"
+    },
+    {
+      "id": "2026-11-07-yt-VY4sJkh_qDc",
+      "kind": "material",
+      "source": "https://www.youtube.com/watch?v=VY4sJkh_qDc",
+      "event_slug": "devcon-8-mumbai",
+      "material_kind": "video",
+      "title": "See You in (Robot) Court: Justice in the Agent Economy (Devcon 8 lightning talk, Ethereum Foundation recording)",
+      "speaker": "Federico Ast",
+      "url": "https://www.youtube.com/watch?v=VY4sJkh_qDc"
     }
   ]
 }
