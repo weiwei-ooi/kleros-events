@@ -664,6 +664,16 @@
       "title": "See You in (Robot) Court: Justice in the Agent Economy (Devcon 8 lightning talk, Ethereum Foundation recording)",
       "speaker": "Federico Ast",
       "url": "https://www.youtube.com/watch?v=VY4sJkh_qDc"
+    },
+    {
+      "id": "2026-11-08-yt-8WV1cg3qXf8",
+      "kind": "material",
+      "source": "https://www.youtube.com/watch?v=8WV1cg3qXf8",
+      "event_slug": "devcon-8-mumbai",
+      "material_kind": "video",
+      "title": "Legal & Governance Hub: Legal Compliance & Token Rights (Devcon 8, 4 Nov, Ethereum Foundation recording)",
+      "speaker": "Wei Wei Ooi and Pree",
+      "url": "https://www.youtube.com/watch?v=8WV1cg3qXf8"
     }
   ]
 }
