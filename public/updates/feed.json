@@ -674,6 +674,16 @@
       "title": "Legal & Governance Hub: Legal Compliance & Token Rights (Devcon 8, 4 Nov, Ethereum Foundation recording)",
       "speaker": "Wei Wei Ooi and Pree",
       "url": "https://www.youtube.com/watch?v=8WV1cg3qXf8"
+    },
+    {
+      "id": "2026-11-11-yt-142t8zMvIO0",
+      "kind": "material",
+      "source": "https://www.youtube.com/watch?v=142t8zMvIO0",
+      "event_slug": "onchain-legal-summit-devcon-india",
+      "material_kind": "video",
+      "title": "Who Do You Sue When an AI Agent Screws Up? Fireside with Federico Ast and Husam Abboud (Onchain Legal Summit, 4 Nov, Entity.ID recording)",
+      "speaker": "Federico Ast and Husam Abboud",
+      "url": "https://www.youtube.com/watch?v=142t8zMvIO0"
     }
   ]
 }
