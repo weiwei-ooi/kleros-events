@@ -684,6 +684,26 @@
       "title": "Who Do You Sue When an AI Agent Screws Up? Fireside with Federico Ast and Husam Abboud (Onchain Legal Summit, 4 Nov, Entity.ID recording)",
       "speaker": "Federico Ast and Husam Abboud",
       "url": "https://www.youtube.com/watch?v=142t8zMvIO0"
+    },
+    {
+      "id": "2026-11-12-yt-MZ6yULk3reo",
+      "kind": "material",
+      "source": "https://www.youtube.com/watch?v=MZ6yULk3reo",
+      "event_slug": "devcon-8-mumbai",
+      "material_kind": "video",
+      "title": "Agentic Hub: Can We Trust the Machines? A Live Trial (Devcon 8, 3 Nov, Ethereum Foundation recording)",
+      "speaker": "Fortunato Cinquepalmi, Lena Hierzi and András Arányi",
+      "url": "https://www.youtube.com/watch?v=MZ6yULk3reo"
+    },
+    {
+      "id": "2026-11-12-yt-tb-Gah-wTzM",
+      "kind": "material",
+      "source": "https://www.youtube.com/watch?v=tb-Gah-wTzM",
+      "event_slug": "devcon-8-mumbai",
+      "material_kind": "video",
+      "title": "The Future of Prediction Markets is Decision Markets (Devcon 8 workshop, 6 Nov, Ethereum Foundation recording)",
+      "speaker": "Clément Lesaege and Devansh Mehta",
+      "url": "https://www.youtube.com/watch?v=tb-Gah-wTzM"
     }
   ]
 }
